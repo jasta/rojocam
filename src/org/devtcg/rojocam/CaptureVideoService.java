@@ -1,29 +1,47 @@
 package org.devtcg.rojocam;
 
-import com.android.camera.R;
-import com.android.camera.VideoCamera;
-
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.PixelFormat;
 import android.hardware.Camera;
-import android.hardware.Camera.CameraInfo;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
 import android.util.Log;
-import android.view.OrientationEventListener;
-import android.widget.Toast;
+import android.view.Gravity;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
+import android.view.WindowManager;
 
 import java.io.IOException;
 
 public class CaptureVideoService extends Service implements
-        MediaRecorder.OnErrorListener, MediaRecorder.OnInfoListener {
+        MediaRecorder.OnErrorListener, MediaRecorder.OnInfoListener, SurfaceHolder.Callback {
     private static final String TAG = CaptureVideoService.class.getSimpleName();
 
-    private boolean mRecording;
+    /**
+     * The Camera infrastructure requires a surface for preview when recording
+     * video, but in our case we want to appear as if we're recording headlessly
+     * without any specific foreground activity. To achieve this effect, we will
+     * satisfy this requirement with a dummy 1x1 SurfaceView attached to the
+     * window manager.
+     */
+    private SurfaceView mDummySurfaceView;
+
+    /**
+     * This holder is only active when the surface is created and ready to use
+     * (so, recording can begin).
+     */
+    private SurfaceHolder mDummySurfaceHolder;
+
+    private static final int NOT_RECORDING = 0;
+    private static final int WAITING_FOR_SURFACE = 1;
+    private static final int RECORDING = 2;
+
+    private int mRecordingState = NOT_RECORDING;
     private Camera mCamera;
     private MediaRecorder mRecorder;
 
@@ -77,24 +95,55 @@ public class CaptureVideoService extends Service implements
     }
 
     private void startCapture() {
-        if (mRecording) {
+        if (mRecordingState != NOT_RECORDING) {
             Log.w(TAG, "Already capturing, ignoring capture request...");
             return;
         }
 
-        initCamera();
-        try {
-            startRecorder();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        mRecordingState = WAITING_FOR_SURFACE;
+        makeAndAddSurfaceView();
+    }
+
+    /**
+     * Constructs and registers a dummy SurfaceView to be used as the preview
+     * surface for the Camera object. We must wait until after the underlying
+     * surface is created before we can proceed with the recording process.
+     */
+    private void makeAndAddSurfaceView() {
+        SurfaceView dummyView = new SurfaceView(this);
+        SurfaceHolder holder = dummyView.getHolder();
+        holder.addCallback(this);
+        holder.setType(SurfaceHolder.SURFACE_TYPE_PUSH_BUFFERS);
+
+        WindowManager wm = (WindowManager)getSystemService(Context.WINDOW_SERVICE);
+
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(1, 1,
+                WindowManager.LayoutParams.TYPE_SYSTEM_ALERT,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                PixelFormat.TRANSLUCENT);
+        params.gravity = Gravity.TOP;
+        wm.addView(dummyView, params);
+
+        mDummySurfaceView = dummyView;
+    }
+
+    private void removeSurfaceView() {
+        WindowManager wm = (WindowManager)getSystemService(Context.WINDOW_SERVICE);
+        wm.removeView(mDummySurfaceView);
+        mDummySurfaceView = null;
     }
 
     private void stopCapture() {
         stopSelf();
-        stopRecorder();
-        closeCamera();
-        releaseCaptureLock();
+        if (mRecordingState != NOT_RECORDING) {
+            if (mRecordingState == RECORDING) {
+                stopRecorder();
+                closeCamera();
+            }
+            removeSurfaceView();
+            releaseCaptureLock();
+        }
     }
 
     private void initCamera() {
@@ -105,6 +154,13 @@ public class CaptureVideoService extends Service implements
         if (mCamera == null) {
             throw new AssertionError("This device does not seem to have a back-facing camera");
         }
+        try {
+            mCamera.setPreviewDisplay(mDummySurfaceHolder);
+        } catch (IOException e) {
+            closeCamera();
+            throw new RuntimeException(e);
+        }
+        mCamera.startPreview();
     }
 
     private void closeCamera() {
@@ -120,9 +176,10 @@ public class CaptureVideoService extends Service implements
         mRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
         mRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
         mRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH));
-        mRecorder.setMaxDuration(0);
 
-        mRecorder.setOutputFile("/sdcard/foo.3gp");
+        mRecorder.setOutputFile("/sdcard/foo.mpg");
+
+        mRecorder.setPreviewDisplay(mDummySurfaceHolder.getSurface());
 
         try {
             mRecorder.prepare();
@@ -141,16 +198,16 @@ public class CaptureVideoService extends Service implements
             throw e;
         }
 
-        mRecording = true;
+        mRecordingState = RECORDING;
     }
 
     private void stopRecorder() {
         if (mRecorder != null) {
-            if (mRecording) {
+            if (mRecordingState == RECORDING) {
                 mRecorder.setOnErrorListener(null);
                 mRecorder.setOnInfoListener(null);
                 mRecorder.stop();
-                mRecording = false;
+                mRecordingState = NOT_RECORDING;
             }
             mRecorder.reset();
             mRecorder.release();
@@ -161,20 +218,53 @@ public class CaptureVideoService extends Service implements
 
     public void onError(MediaRecorder mr, int what, int extra) {
         Log.w(TAG, "Media recorder error: what=" + what + "; extra=" + extra);
-        if (mRecording) {
-            stopRecorder();
+        if (mRecordingState == RECORDING) {
+            stopCapture();
         }
     }
 
     public void onInfo(MediaRecorder mr, int what, int extra) {
         Log.i(TAG, "Media recorder info: what=" + what + "; extra=" + extra);
-        if (mRecording) {
-            stopRecorder();
+        if (mRecordingState == RECORDING) {
+            stopCapture();
         }
     }
 
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+        Log.d(TAG, "surfaceChanged: format=" + format + "; width=" + width + "; height=" + height);
+
+        /* XXX: com.android.camera does this check, but why? */
+        if (holder.getSurface() == null) {
+            Log.d(TAG, "holder.getSurface() is null");
+            return;
+        }
+
+        mDummySurfaceHolder = holder;
+
+        if (mRecordingState == WAITING_FOR_SURFACE) {
+            Log.d(TAG, "Initializing camera...");
+            initCamera();
+            try {
+                /* Start recorder is expected to change the state into RECORDING. */
+                Log.d(TAG, "Starting recorder...");
+                startRecorder();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public void surfaceCreated(SurfaceHolder holder) {
+        Log.d(TAG, "surfaceCreated");
+    }
+
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        Log.d(TAG, "surfaceDestroyed");
+        mDummySurfaceHolder = null;
     }
 }
