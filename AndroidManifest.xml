@@ -37,7 +37,8 @@
 
         </activity>
 
-        <service android:name=".CaptureVideoService" />
+        <service android:name=".CaptureVideoService"
+            android:exported="false" />
 
     </application>
 
