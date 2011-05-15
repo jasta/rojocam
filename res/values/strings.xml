@@ -3,4 +3,6 @@
     <string name="app_name">Rojocam</string>
     <string name="start">Start</string>
     <string name="stop">Stop</string>
+    <string name="recording_notif_title">Recording</string>
+    <string name="recording_notif_text">Rojocam is recording from this device.</string>
 </resources>

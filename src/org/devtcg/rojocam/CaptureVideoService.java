@@ -1,10 +1,11 @@
 package org.devtcg.rojocam;
 
+import android.app.Notification;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.PixelFormat;
-import android.hardware.Camera;
 import android.media.CamcorderProfile;
 import android.media.MediaRecorder;
 import android.os.IBinder;
@@ -18,6 +19,14 @@ import android.view.WindowManager;
 
 import java.io.IOException;
 
+/**
+ * Foreground service handling passive recording requests. This service employs
+ * a fake system dialog housing our preview surface in order to achieve
+ * "headless" video capture on Android.
+ * <p>
+ * TODO: This service currently blocks the main thread as the MediaRecorder is
+ * being prepared and started.
+ */
 public class CaptureVideoService extends Service implements
         MediaRecorder.OnErrorListener, MediaRecorder.OnInfoListener, SurfaceHolder.Callback {
     private static final String TAG = CaptureVideoService.class.getSimpleName();
@@ -42,8 +51,9 @@ public class CaptureVideoService extends Service implements
     private static final int RECORDING = 2;
 
     private int mRecordingState = NOT_RECORDING;
-    private Camera mCamera;
     private MediaRecorder mRecorder;
+
+    private static final int NOTIF_RECORDING = 0;
 
     public static WakeLock mWakeLock;
 
@@ -100,6 +110,17 @@ public class CaptureVideoService extends Service implements
             return;
         }
 
+        Intent intent = new Intent(Constants.ACTION_STOP_CAPTURE, null,
+                this, CaptureVideoService.class);
+
+        Notification notif = new Notification();
+        notif.icon = android.R.drawable.stat_sys_upload;
+        notif.flags = Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
+        notif.setLatestEventInfo(this, getString(R.string.recording_notif_title),
+                getString(R.string.recording_notif_text),
+                PendingIntent.getService(this, 0, intent, 0));
+        startForeground(NOTIF_RECORDING, notif);
+
         mRecordingState = WAITING_FOR_SURFACE;
         makeAndAddSurfaceView();
     }
@@ -135,49 +156,27 @@ public class CaptureVideoService extends Service implements
     }
 
     private void stopCapture() {
-        stopSelf();
         if (mRecordingState != NOT_RECORDING) {
             if (mRecordingState == RECORDING) {
+                /* XXX: stopRecorder will set mRecordingState for us. */
                 stopRecorder();
-                closeCamera();
+            } else {
+                mRecordingState = NOT_RECORDING;
             }
             removeSurfaceView();
             releaseCaptureLock();
         }
-    }
-
-    private void initCamera() {
-        if (mCamera != null) {
-            throw new IllegalStateException("Camera already initialized?");
-        }
-        mCamera = Camera.open();
-        if (mCamera == null) {
-            throw new AssertionError("This device does not seem to have a back-facing camera");
-        }
-        try {
-            mCamera.setPreviewDisplay(mDummySurfaceHolder);
-        } catch (IOException e) {
-            closeCamera();
-            throw new RuntimeException(e);
-        }
-        mCamera.startPreview();
-    }
-
-    private void closeCamera() {
-        mCamera.release();
-        mCamera = null;
+        stopForeground(true);
+        stopSelf();
     }
 
     private void startRecorder() throws IOException {
         mRecorder = new MediaRecorder();
-
-        mCamera.unlock();
-        mRecorder.setCamera(mCamera);
         mRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
         mRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
         mRecorder.setProfile(CamcorderProfile.get(CamcorderProfile.QUALITY_HIGH));
 
-        mRecorder.setOutputFile("/sdcard/foo.mpg");
+        mRecorder.setOutputFile("/sdcard/foo.mp4");
 
         mRecorder.setPreviewDisplay(mDummySurfaceHolder.getSurface());
 
@@ -202,18 +201,15 @@ public class CaptureVideoService extends Service implements
     }
 
     private void stopRecorder() {
-        if (mRecorder != null) {
-            if (mRecordingState == RECORDING) {
-                mRecorder.setOnErrorListener(null);
-                mRecorder.setOnInfoListener(null);
-                mRecorder.stop();
-                mRecordingState = NOT_RECORDING;
-            }
-            mRecorder.reset();
-            mRecorder.release();
-            mRecorder = null;
+        if (mRecordingState == RECORDING) {
+            mRecorder.setOnErrorListener(null);
+            mRecorder.setOnInfoListener(null);
+            mRecorder.stop();
         }
-        mCamera.lock();
+        mRecorder.reset();
+        mRecorder.release();
+        mRecorder = null;
+        mRecordingState = NOT_RECORDING;
     }
 
     public void onError(MediaRecorder mr, int what, int extra) {
@@ -247,8 +243,6 @@ public class CaptureVideoService extends Service implements
         mDummySurfaceHolder = holder;
 
         if (mRecordingState == WAITING_FOR_SURFACE) {
-            Log.d(TAG, "Initializing camera...");
-            initCamera();
             try {
                 /* Start recorder is expected to change the state into RECORDING. */
                 Log.d(TAG, "Starting recorder...");
