@@ -6,6 +6,9 @@
 
     <uses-sdk android:minSdkVersion="10" />
 
+    <!-- This permission is needed to talk to the local network even. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <!-- Required only for debugging at the moment... -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 

@@ -101,6 +101,12 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
     protected abstract void onRecorderInitialized(MediaRecorder recorder);
 
     /**
+     * Invoked prior to the recorder being stopped. Only called after
+     * onRecorderInitialized has also been called.
+     */
+    protected abstract void onRecorderStopped(MediaRecorder recorder);
+
+    /**
      * Constructs and registers a dummy SurfaceView to be used as the preview
      * surface for the Camera object. We must wait until after the underlying
      * surface is created before we can proceed with the recording process.
@@ -133,7 +139,6 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
     private void startRecorder() throws IOException {
         mRecorder = new MediaRecorder();
         onRecorderInitialized(mRecorder);
-
         mRecorder.setPreviewDisplay(mDummySurfaceHolder.getSurface());
 
         try {
@@ -155,6 +160,7 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
 
     private void stopRecorder() {
         if (mRecordingState == RECORDING) {
+            onRecorderStopped(mRecorder);
             mRecorder.setOnErrorListener(null);
             mRecorder.setOnInfoListener(null);
             mRecorder.stop();
