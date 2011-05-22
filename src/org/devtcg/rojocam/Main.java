@@ -18,10 +18,10 @@ public class Main extends Activity implements OnClickListener {
     public void onClick(View v) {
         switch (v.getId()) {
             case R.id.start:
-                CaptureVideoService.startCapture(this);
+                CamcorderNodeService.activateCameraNode(this);
                 break;
             case R.id.stop:
-                CaptureVideoService.stopCapture(this);
+                CamcorderNodeService.deactivateCameraNode(this);
                 break;
         }
     }

@@ -1,4 +1,4 @@
-package org.devtcg.rojocam.rtp;
+package org.devtcg.rojocam.rtsp;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -9,6 +9,7 @@ public class RtspSession {
 
     private final String mSessionId;
     private RtspState mState;
+    private MediaSession mMediaSession;
 
     /**
      * RTSP server states according to RFC2326.
@@ -36,6 +37,14 @@ public class RtspSession {
 
     public void setState(RtspState state) {
         mState = state;
+    }
+
+    public void setMediaSession(MediaSession media) {
+        mMediaSession = media;
+    }
+
+    public MediaSession getMediaSession() {
+        return mMediaSession;
     }
 
     private static String generateSessionId() {

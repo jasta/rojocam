@@ -1,21 +1,29 @@
 
-package org.devtcg.rojocam.rtp;
+package org.devtcg.rojocam.rtsp;
 
 import org.apache.http.Header;
 import org.apache.http.HttpException;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
+import org.apache.http.ProtocolException;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.SocketHttpServerConnection;
+import org.apache.http.protocol.ExecutionContext;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.protocol.HttpRequestHandler;
-import org.devtcg.rojocam.rtp.RtspSession.RtspState;
+import org.devtcg.rojocam.rtsp.RtspSession.RtspState;
 
 import android.util.Log;
 
 import java.io.IOException;
+import java.text.ParseException;
 import java.util.HashMap;
 
+/**
+ * Very crude RTSP implementation designed only to support the bare minimum
+ * required for the camcorder node.
+ */
 public class SimpleRtspServer extends AbstractRtspServer implements HttpRequestHandler {
     private static final String TAG = SimpleRtspServer.class.getSimpleName();
 
@@ -24,8 +32,12 @@ public class SimpleRtspServer extends AbstractRtspServer implements HttpRequestH
     /* XXX: Sessions are not expired on a timer, only by graceful TEARDOWN. */
     private final HashMap<String, RtspSession> mSessions = new HashMap<String, RtspSession>();
 
-    static {
-    }
+    /*
+     * XXX: Weak abstraction attempting to map RTSP request URIs with some
+     * high-level handler interface that can be implemented outside this class
+     * to coordinate the RTP/RTCP streams.
+     */
+    private MediaHandler mMediaHandler;
 
     public SimpleRtspServer() {
         /* Catch-all request handler. */
@@ -39,6 +51,18 @@ public class SimpleRtspServer extends AbstractRtspServer implements HttpRequestH
         mMethodHandlers.put(RtspMethods.PLAY, new PlayHandler());
         mMethodHandlers.put(RtspMethods.PAUSE, new PauseHandler());
         mMethodHandlers.put(RtspMethods.TEARDOWN, new TeardownHandler());
+    }
+
+    public synchronized void registerMedia(String feedUri, MediaHandler handler) {
+        mMediaHandler = handler;
+    }
+
+    public synchronized void unregisterMedia(String feedUri) {
+        mMediaHandler = null;
+    }
+
+    private synchronized MediaHandler getHandler() {
+        return mMediaHandler;
     }
 
     private RtspSession beginSession() {
@@ -92,7 +116,7 @@ public class SimpleRtspServer extends AbstractRtspServer implements HttpRequestH
         }
     }
 
-    private static class DescribeHandler implements HttpRequestHandler {
+    private class DescribeHandler implements HttpRequestHandler {
         private static final String SDP_CONTENT_TYPE = "application/sdp";
 
         public void handle(HttpRequest request, HttpResponse response, HttpContext context)
@@ -101,7 +125,7 @@ public class SimpleRtspServer extends AbstractRtspServer implements HttpRequestH
             if (acceptHeader != null && acceptHeader.getValue().equals(SDP_CONTENT_TYPE)) {
                 response.addHeader(RtspHeaders.CONTENT_BASE, request.getRequestLine().getUri()
                         + "/");
-                StringEntity entity = new StringEntity(buildSdp());
+                StringEntity entity = new StringEntity(getHandler().onDescribe(null));
                 entity.setContentType(SDP_CONTENT_TYPE);
                 response.setEntity(entity);
                 response.setStatusCode(HttpStatus.SC_OK);
@@ -111,47 +135,34 @@ public class SimpleRtspServer extends AbstractRtspServer implements HttpRequestH
                 response.setStatusCode(HttpStatus.SC_BAD_REQUEST);
             }
         }
-
-        /*
-         * XXX: I haven't bothered to understand this format well enough to
-         * create a proper builder class.
-         */
-        private static String buildSdp() {
-            StringBuilder b = new StringBuilder();
-            b.append("o=- 0 0 IN IP4 127.0.0.1\n");
-            b.append("t=0 0\n");
-            b.append("s=No Title\n");
-            b.append("m=video 0 RTP/AVP 96\n");
-            b.append("a=rtpmap:96 H263-1998/90000\n");
-            b.append("a=control:streamid=0\n");
-            b.append("a=framesize:96 176-144\n");
-            return b.toString();
-        }
     }
 
     private class SetupHandler implements HttpRequestHandler {
         public void handle(HttpRequest request, HttpResponse response, HttpContext context)
                 throws HttpException, IOException {
             Header transportHeader = request.getFirstHeader(RtspHeaders.TRANSPORT);
-            if (transportHeader != null) {
-                RtpTransportDesc transport = RtpTransportDesc.fromString(transportHeader.getValue());
-                if (transport.lowerTransport == RtpTransportDesc.Transport.UDP &&
-                        transport.clientRtpPort != 0 &&
-                        transport.destType == RtpTransportDesc.DestinationType.UNICAST) {
-                    transport.serverRtpPort = 5000;
-                    transport.serverRtcpPort = 5001;
-                    RtspSession session = beginSession();
-                    response.addHeader(RtspHeaders.SESSION, session.getSessionId());
-                    response.addHeader(RtspHeaders.TRANSPORT, transport.toString());
-                    response.setStatusCode(HttpStatus.SC_OK);
-                } else {
-                    Log.d(TAG, "Client requested unsupported transport: " + transportHeader.getValue());
-                    response.setStatusCode(RtspStatus.SC_UNSUPPORTED_TRANSPORT);
-                }
-            } else {
-                Log.d(TAG, "Client missing Transport header");
-                response.setStatusCode(RtspStatus.SC_UNSUPPORTED_TRANSPORT);
+            if (transportHeader == null) {
+                throw new ProtocolException("Missing transport header");
             }
+            try {
+                RtpTransport transport = RtpTransport.fromString(transportHeader.getValue());
+                SocketHttpServerConnection conn = (SocketHttpServerConnection)context.getAttribute(
+                        ExecutionContext.HTTP_CONNECTION);
+                if (transport.lowerTransport == RtpTransport.Transport.UDP &&
+                        transport.clientRtpPort != 0 &&
+                        transport.destType == RtpTransport.DestinationType.UNICAST) {
+                    RtspSession session = beginSession();
+                    session.setMediaSession(getHandler().createSession(conn.getRemoteAddress(), transport));
+                    RtpTransport serverTransport = session.getMediaSession().onSetup(null);
+                    response.addHeader(RtspHeaders.SESSION, session.getSessionId());
+                    response.addHeader(RtspHeaders.TRANSPORT, serverTransport.toString());
+                    response.setStatusCode(HttpStatus.SC_OK);
+                }
+                return;
+            } catch (ParseException e) {
+            }
+            Log.d(TAG, "Client requested unsupported transport: " + transportHeader.getValue());
+            response.setStatusCode(RtspStatus.SC_UNSUPPORTED_TRANSPORT);
         }
     }
 
@@ -174,8 +185,8 @@ public class SimpleRtspServer extends AbstractRtspServer implements HttpRequestH
         public void handle(HttpRequest request, HttpResponse response, HttpContext context, RtspSession session)
                 throws HttpException, IOException {
             if (session.getState() != RtspState.PLAYING) {
-                Log.d(TAG, "Supposed to start playing, but we don't have an RTP implementation yet!");
                 session.setState(RtspState.PLAYING);
+                session.getMediaSession().onPlay(null);
             }
             response.setStatusCode(HttpStatus.SC_OK);
         }
@@ -185,8 +196,8 @@ public class SimpleRtspServer extends AbstractRtspServer implements HttpRequestH
         public void handle(HttpRequest request, HttpResponse response, HttpContext context, RtspSession session)
                 throws HttpException, IOException {
             if (session.getState() == RtspState.PLAYING) {
-                Log.d(TAG, "Supposed to pause, but we don't have any RTP socket to close!");
                 session.setState(RtspState.READY);
+                session.getMediaSession().onPause(null);
             }
             response.setStatusCode(HttpStatus.SC_OK);
         }
@@ -195,86 +206,8 @@ public class SimpleRtspServer extends AbstractRtspServer implements HttpRequestH
     private class TeardownHandler extends InSessionHandler {
         public void handle(HttpRequest request, HttpResponse response, HttpContext context, RtspSession session)
                 throws HttpException, IOException {
+            session.getMediaSession().onTeardown(null);
             endSession(session);
-        }
-    }
-
-    private static class RtpTransportDesc {
-        public enum Transport {
-            TCP, UDP,
-        }
-
-        public enum DestinationType {
-            MULTICAST, UNICAST,
-        }
-
-        public Transport lowerTransport;
-        public DestinationType destType;
-        public int clientRtpPort;
-        public int clientRtcpPort;
-        public int serverRtpPort;
-        public int serverRtcpPort;
-
-        private RtpTransportDesc() {
-        }
-
-        public static RtpTransportDesc fromString(String string) throws HttpException {
-            RtpTransportDesc desc = new RtpTransportDesc();
-            for (String segment : string.split(";")) {
-                if (segment.startsWith("RTP/")) {
-                    for (String transportPart: segment.split("/", 3)) {
-                        if (transportPart.equals("TCP")) {
-                            desc.lowerTransport = Transport.TCP;
-                        } else {
-                            desc.lowerTransport = Transport.UDP;
-                        }
-                    }
-                    if (desc.lowerTransport == null) {
-                        Log.d(TAG, "Unable to determine lower transport: " + segment);
-                    }
-                } else if (segment.startsWith("client_port=")) {
-                    String[] ports = segment.substring(12).split("-", 2);
-                    try {
-                        desc.clientRtpPort = Integer.parseInt(ports[0]);
-                        if (ports.length > 1) {
-                            desc.clientRtcpPort = Integer.parseInt(ports[1]);
-                        }
-                    } catch (NumberFormatException e) {
-                    }
-                    if (desc.clientRtpPort == 0) {
-                        Log.d(TAG, "Unparseable client ports: " + segment);
-                    }
-                } else {
-                    if (segment.equals("unicast")) {
-                        desc.destType = DestinationType.UNICAST;
-                    } else if (segment.equals("multicast")) {
-                        desc.destType = DestinationType.MULTICAST;
-                    } else {
-                        Log.d(TAG, "Unrecognized transport option: " + segment);
-                    }
-                }
-            }
-            return desc;
-        }
-
-        public String toString() {
-            if (lowerTransport != Transport.UDP) {
-                throw new UnsupportedOperationException("We only support UDP transports");
-            }
-            StringBuilder b = new StringBuilder();
-            b.append("RTP/AVP/" + lowerTransport);
-            b.append(';');
-            if (destType != DestinationType.UNICAST) {
-                throw new UnsupportedOperationException("We only support unicast packets");
-            }
-            b.append("unicast");
-            b.append(';');
-            b.append("client_port=" + clientRtpPort + "-" + clientRtcpPort);
-            if (serverRtpPort != 0 && serverRtcpPort != 0) {
-                b.append(';');
-                b.append("server_port=" + serverRtpPort + "-" + serverRtcpPort);
-            }
-            return b.toString();
         }
     }
 }

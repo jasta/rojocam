@@ -6,7 +6,7 @@
 
     <uses-sdk android:minSdkVersion="10" />
 
-    <!-- This permission is needed to talk to the local network even. -->
+    <!-- This permission is needed to talk to the local network via WiFi. -->
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Required only for debugging at the moment... -->
@@ -15,22 +15,21 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" />
 
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-
     <!-- Active during capture. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <!-- Required for a hack in CaptureVideoService that allows us to create a
-         dummy SurfaceView from a Service. This is necessary only because
-         Android requires a SurfaceView to use the Camera. -->
+    <!-- Required for a hack that allows us to create a dummy SurfaceView from
+         a Service. This is necessary only because Android requires a
+         SurfaceView to use the Camera. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
 
     <application
         android:icon="@drawable/icon"
         android:label="@string/app_name">
 
+        <!-- Temporary control/debug console. -->
         <activity
-            android:name=".Main"
+            android:name="Main"
             android:label="@string/app_name">
 
             <intent-filter>
@@ -40,7 +39,9 @@
 
         </activity>
 
-        <service android:name=".CaptureVideoService"
+        <!-- Persistent service active when the device is being used as a
+             camcorder node. -->
+        <service android:name=".CamcorderNodeService"
             android:exported="false" />
 
     </application>

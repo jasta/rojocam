@@ -1,4 +1,4 @@
-package org.devtcg.rojocam.rtp;
+package org.devtcg.rojocam.rtsp;
 
 public class StringUtils {
     public static String join(String[] array, String delimiter) {

@@ -3,6 +3,8 @@ package org.devtcg.rojocam;
 import android.content.Context;
 import android.graphics.PixelFormat;
 import android.media.MediaRecorder;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.SurfaceHolder;
@@ -69,8 +71,13 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
             throw new IllegalStateException("Camcorder already started");
         }
 
-        mRecordingState = WAITING_FOR_SURFACE;
-        makeAndAddSurfaceView();
+        /* XXX: NOOOOOO!!!! */
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            public void run() {
+                mRecordingState = WAITING_FOR_SURFACE;
+                makeAndAddSurfaceView();
+            }
+        });
     }
 
     /**

@@ -1,4 +1,4 @@
-package org.devtcg.rojocam.rtp;
+package org.devtcg.rojocam.rtsp;
 
 public interface RtspHeaders {
     public static final String CSEQ = "CSeq";

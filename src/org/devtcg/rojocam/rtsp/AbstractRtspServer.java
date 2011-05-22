@@ -12,7 +12,7 @@
  * General Public License for more details.
  */
 
-package org.devtcg.rojocam.rtp;
+package org.devtcg.rojocam.rtsp;
 
 import org.apache.http.ConnectionReuseStrategy;
 import org.apache.http.Header;
@@ -58,7 +58,13 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashSet;
 
-/* HttpClient is surprisingly flexible to allow this sort of voodoo.  Kudos Apache, Kudos. */
+/**
+ * Basic structure of an RTSP server using HttpClient. Should be extended to
+ * respond to requests made by clients.
+ * <p>
+ * HttpClient is surprisingly flexible to allow this kind of voodoo. Kudos
+ * Apache, Kudos.
+ */
 public abstract class AbstractRtspServer extends Thread {
 	public static final String TAG = AbstractRtspServer.class.getSimpleName();
 
@@ -74,8 +80,13 @@ public abstract class AbstractRtspServer extends Thread {
 	public AbstractRtspServer() {
 		super(TAG);
 
+        /*
+         * XXX: Android as a client seems very unhappy if the RTSP connection is
+         * closed so we must use an SO_TIMEOUT of infinite to avoid that. The
+         * client can close when it wants to.
+         */
 		mParams = new BasicHttpParams()
-		        .setIntParameter(CoreConnectionPNames.SO_TIMEOUT, 15000)
+		        .setIntParameter(CoreConnectionPNames.SO_TIMEOUT, 0)
 		        .setIntParameter(CoreConnectionPNames.SOCKET_BUFFER_SIZE, 16384)
 		        .setBooleanParameter(CoreConnectionPNames.STALE_CONNECTION_CHECK, false)
 		        .setBooleanParameter(CoreConnectionPNames.TCP_NODELAY, true);

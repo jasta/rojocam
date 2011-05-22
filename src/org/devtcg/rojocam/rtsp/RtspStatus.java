@@ -1,4 +1,4 @@
-package org.devtcg.rojocam.rtp;
+package org.devtcg.rojocam.rtsp;
 
 import org.apache.http.HttpStatus;
 
