@@ -7,7 +7,8 @@ import java.io.InputStream;
  * Generates payload messages from an H263+ video stream to be sent over RTP.
  * <p>
  * This code reflects the subset of RFC4629 that we're interested in for
- * transmitting video.
+ * transmitting video. In retrospect, I should have just used libffmpeg to do
+ * all this work for me.
  */
 public class H263PayloadGenerator {
     private final InputStream mStream;

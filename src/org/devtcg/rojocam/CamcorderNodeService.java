@@ -1,5 +1,6 @@
 package org.devtcg.rojocam;
 
+import org.devtcg.rojocam.StreamingHeadlessCamcorder.MyRtpParticipant;
 import org.devtcg.rojocam.rtsp.MediaHandler;
 import org.devtcg.rojocam.rtsp.MediaSession;
 import org.devtcg.rojocam.rtsp.RtpTransport;
@@ -107,6 +108,8 @@ public class CamcorderNodeService extends Service {
             b.append("m=video 0 RTP/AVP 96\n");
             b.append("a=rtpmap:96 H263-1998/90000\n");
             b.append("a=control:streamid=0\n");
+            b.append("a=fmtp:96 profile=0; level=40\n");
+            b.append("a=cliprect:0,0,144,176\n");
             b.append("a=framesize:96 176-144\n");
             return b.toString();
         }
@@ -120,7 +123,8 @@ public class CamcorderNodeService extends Service {
             private final RtpTransport mTransport;
 
             public CamcorderSession(InetAddress client, RtpTransport transport) {
-                mParticipant = new Participant(client.getHostAddress(),
+                System.out.println("New session created for " + client.getHostAddress() + ": rtpPort=" + transport.clientRtpPort + ", rtcpPort=" + transport.clientRtcpPort);
+                mParticipant = new MyRtpParticipant(client.getHostAddress(),
                         transport.clientRtpPort, transport.clientRtcpPort);
                 mTransport = new RtpTransport(transport);
             }

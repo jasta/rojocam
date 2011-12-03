@@ -126,7 +126,7 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
 
         WindowManager wm = (WindowManager)getContext().getSystemService(Context.WINDOW_SERVICE);
 
-        WindowManager.LayoutParams params = new WindowManager.LayoutParams(1, 1,
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(100, 100,
                 WindowManager.LayoutParams.TYPE_SYSTEM_ALERT,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
