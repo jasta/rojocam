@@ -2,9 +2,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.devtcg.rojocam"
     android:versionCode="1"
-    android:versionName="1.0">
+    android:versionName="1.0"
+    android:installLocation="auto">
 
-    <uses-sdk android:minSdkVersion="10" />
+    <uses-sdk android:minSdkVersion="10" android:targetSdkVersion="10" />
 
     <!-- This permission is needed to talk to the local network via WiFi. -->
     <uses-permission android:name="android.permission.INTERNET" />

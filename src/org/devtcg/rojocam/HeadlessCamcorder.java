@@ -1,8 +1,10 @@
 package org.devtcg.rojocam;
 
 import android.content.Context;
+import android.graphics.ImageFormat;
 import android.graphics.PixelFormat;
-import android.media.MediaRecorder;
+import android.hardware.Camera;
+import android.hardware.Camera.Size;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -49,7 +51,7 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
     private int mRecordingState = NOT_RECORDING;
 
     /* Non-null only when in the RECORDING state. */
-    private MediaRecorder mRecorder;
+    private Camera mCamera;
 
     public HeadlessCamcorder(Context context) {
         mContext = new WeakReference<Context>(context);
@@ -105,13 +107,13 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
      * Override this method to set the recorder parameters (quality, output
      * file, etc) prior to recording.
      */
-    protected abstract void onRecorderInitialized(MediaRecorder recorder);
+    protected abstract void onRecorderInitialized(Camera camera);
 
     /**
      * Invoked prior to the recorder being stopped. Only called after
      * onRecorderInitialized has also been called.
      */
-    protected abstract void onRecorderStopped(MediaRecorder recorder);
+    protected abstract void onRecorderStopped(Camera camera);
 
     /**
      * Constructs and registers a dummy SurfaceView to be used as the preview
@@ -144,19 +146,28 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
     }
 
     private void startRecorder() throws IOException {
-        mRecorder = new MediaRecorder();
-        onRecorderInitialized(mRecorder);
-        mRecorder.setPreviewDisplay(mDummySurfaceHolder.getSurface());
-
-        try {
-            mRecorder.prepare();
-        } catch (IOException e) {
-            stopRecorder();
-            throw e;
+        mCamera = Camera.open();
+        if (mCamera == null) {
+            throw new UnsupportedOperationException("No camera present");
         }
 
+        mCamera.setPreviewDisplay(mDummySurfaceHolder);
+
+        /* Responsible for setting parameters and establishing the preview callbacks. */
+        onRecorderInitialized(mCamera);
+
+        Camera.Parameters params = mCamera.getParameters();
+        int format = params.getPreviewFormat();
+        Size size = params.getPreviewSize();
+        int[] frameRates = new int[2];
+        params.getPreviewFpsRange(frameRates);
+        Log.w(TAG, "Camera properties: bpp=" + ImageFormat.getBitsPerPixel(format) +
+                "; format=" + format +
+                "; size=" + size.width + "x" + size.height +
+                "; frameRates=" + frameRates[0] + "-" + frameRates[1]);
+
         try {
-            mRecorder.start(); // Recording is now started
+            mCamera.startPreview(); // Recording is now started
         } catch (RuntimeException e) {
             stopRecorder();
             throw e;
@@ -166,15 +177,14 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
     }
 
     private void stopRecorder() {
+        Log.i(TAG, "Stopping recorder...");
+
         if (mRecordingState == RECORDING) {
-            onRecorderStopped(mRecorder);
-            mRecorder.setOnErrorListener(null);
-            mRecorder.setOnInfoListener(null);
-            mRecorder.stop();
+            onRecorderStopped(mCamera);
+            mCamera.stopPreview();
         }
-        mRecorder.reset();
-        mRecorder.release();
-        mRecorder = null;
+        mCamera.release();
+        mCamera = null;
         mRecordingState = NOT_RECORDING;
     }
 
@@ -192,7 +202,7 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
         if (mRecordingState == WAITING_FOR_SURFACE) {
             try {
                 /* Start recorder is expected to change the state into RECORDING. */
-                Log.d(TAG, "Starting recorder...");
+                Log.i(TAG, "Starting recorder...");
                 startRecorder();
             } catch (IOException e) {
                 throw new RuntimeException(e);

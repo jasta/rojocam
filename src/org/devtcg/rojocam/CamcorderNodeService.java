@@ -1,11 +1,7 @@
 package org.devtcg.rojocam;
 
-import org.devtcg.rojocam.StreamingHeadlessCamcorder.MyRtpParticipant;
-import org.devtcg.rojocam.rtsp.MediaHandler;
-import org.devtcg.rojocam.rtsp.MediaSession;
-import org.devtcg.rojocam.rtsp.RtpTransport;
 import org.devtcg.rojocam.rtsp.SimpleRtspServer;
-import org.jlibrtp.Participant;
+import org.devtcg.rojocam.util.ReferenceCounter;
 
 import android.app.Notification;
 import android.app.PendingIntent;
@@ -77,7 +73,7 @@ public class CamcorderNodeService extends Service {
             /* XXX: We should only bind on WiFi! */
             mRtspServer = new SimpleRtspServer();
             mRtspServer.bind(new InetSocketAddress((InetAddress)null, 5454));
-            mRtspServer.registerMedia("test1.rtp", mMediaHandler);
+            mRtspServer.registerMedia("test1.rtp", new CamcorderMediaHandler(mCamcorderRef));
             mRtspServer.start();
         } catch (IOException e) {
             throw new RuntimeException(e);
@@ -91,71 +87,6 @@ public class CamcorderNodeService extends Service {
         }
         stopSelf();
     }
-
-    /* XXX: This must be decomposed into MediaHandler and MediaSession.  As it stands makes absolutely no sense. */
-    private final MediaHandler mMediaHandler = new MediaHandler() {
-        private StreamingHeadlessCamcorder mCamcorder;
-
-        public String onDescribe(String feedUri) {
-            /*
-             * XXX: I haven't bothered to understand this format well enough to
-             * create a proper builder class.
-             */
-            StringBuilder b = new StringBuilder();
-            b.append("o=- 0 0 IN IP4 127.0.0.1\n");
-            b.append("t=0 0\n");
-            b.append("s=No Title\n");
-            b.append("m=video 0 RTP/AVP 96\n");
-            b.append("a=rtpmap:96 H263-1998/90000\n");
-            b.append("a=control:streamid=0\n");
-            b.append("a=fmtp:96 profile=0; level=40\n");
-            b.append("a=cliprect:0,0,144,176\n");
-            b.append("a=framesize:96 176-144\n");
-            return b.toString();
-        }
-
-        public MediaSession createSession(InetAddress client, RtpTransport transport) {
-            return new CamcorderSession(client, transport);
-        }
-
-        class CamcorderSession implements MediaSession {
-            private final Participant mParticipant;
-            private final RtpTransport mTransport;
-
-            public CamcorderSession(InetAddress client, RtpTransport transport) {
-                System.out.println("New session created for " + client.getHostAddress() + ": rtpPort=" + transport.clientRtpPort + ", rtcpPort=" + transport.clientRtcpPort);
-                mParticipant = new MyRtpParticipant(client.getHostAddress(),
-                        transport.clientRtpPort, transport.clientRtcpPort);
-                mTransport = new RtpTransport(transport);
-            }
-
-            public RtpTransport onSetup(String feedUri) {
-                /*
-                 * XXX: We need to tie release() in with session expiration rules!
-                 * As it stands, we can leak and get into a state of perpetual
-                 * streaming!
-                 */
-                mCamcorder = mCamcorderRef.acquire();
-
-                mTransport.serverRtpPort = mCamcorder.getRtpPort();
-                mTransport.serverRtcpPort = mCamcorder.getRtcpPort();
-
-                return mTransport;
-            }
-
-            public void onPlay(String feedUri) {
-                mCamcorder.addParticipant(mParticipant);
-            }
-
-            public void onPause(String feedUri) {
-                mCamcorder.removeParticipant(mParticipant);
-            }
-
-            public void onTeardown(String feedUri) {
-                mCamcorderRef.release();
-            }
-        }
-    };
 
     private void takeCaptureLock() {
         if (mCaptureLock == null) {
@@ -214,31 +145,4 @@ public class CamcorderNodeService extends Service {
             releaseCaptureLock();
         }
     };
-
-    private static abstract class ReferenceCounter<T> {
-        private int mCount;
-        private T mInstance;
-
-        public synchronized T acquire() {
-            if (mCount == 0) {
-                mInstance = onCreate();
-            }
-            mCount++;
-            return mInstance;
-        }
-
-        public synchronized void release() {
-            if (mCount < 1) {
-                throw new IllegalStateException("Unbalanced release calls");
-            }
-            mCount--;
-            if (mCount == 0) {
-                onDestroy(mInstance);
-                mInstance = null;
-            }
-        }
-
-        protected abstract T onCreate();
-        protected abstract void onDestroy(T instance);
-    }
 }
