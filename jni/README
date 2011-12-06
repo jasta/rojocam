@@ -1,0 +1,8 @@
+ffmpeg was compiled from a git clone at:
+
+  git://git.videolan.org/ffmpeg.git
+  commit 8190f62f9b21b5013e2ce47073244b199482dd58
+
+The configure command-line I used was:
+
+./configure --disable-shared --enable-static --disable-avfilter --disable-mpegaudio-hp --enable-small --disable-avdevice  --arch=arm --cross-prefix=arm-linux-androideabi- --extra-ldflags="-L$HOME/android/ics/prebuilt/ndk/android-ndk-r6/platforms/android-9/arch-arm/usr/lib -nostdlib" --target-os=linux --enable-cross-compile --extra-cflags="-I$HOME/android/ics/prebuilt/ndk/android-ndk-r6/platforms/android-9/arch-arm/usr/include" --extra-libs="-lgcc -lc"
