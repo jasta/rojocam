@@ -1,0 +1,4 @@
+This project is currently in a very early proof-of-concept state, showing a
+mostly working ffmpeg integration and a basic headless camera set-up.
+
+Hopefully I'll have time to finish up the rest of the uninteresting bits :)
