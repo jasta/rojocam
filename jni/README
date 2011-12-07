@@ -1,8 +1,14 @@
-ffmpeg was compiled from a git clone at:
+x264 was compiled from:
 
-  git://git.videolan.org/ffmpeg.git
-  commit 8190f62f9b21b5013e2ce47073244b199482dd58
+git://git.videolan.org/x264.git
+commit 0c7dab9c2a106ce3ee5d6ad7282afb49e1cc3954
 
-The configure command-line I used was:
+ffmpeg was compiled from:
 
-./configure --disable-shared --enable-static --disable-avfilter --disable-mpegaudio-hp --enable-small --disable-avdevice  --arch=arm --cross-prefix=arm-linux-androideabi- --extra-ldflags="-L$HOME/android/ics/prebuilt/ndk/android-ndk-r6/platforms/android-9/arch-arm/usr/lib -nostdlib" --target-os=linux --enable-cross-compile --extra-cflags="-I$HOME/android/ics/prebuilt/ndk/android-ndk-r6/platforms/android-9/arch-arm/usr/include" --extra-libs="-lgcc -lc"
+git://git.videolan.org/ffmpeg.git
+commit 901af94b6976c05d7c092024c1dcf891ab3be66a
+
+They were built using android-ndk-r7 with the scripts build-x264.sh and
+build-ffmpeg.sh respectively.  build-ffmpeg.sh hardcodes the path to x264
+though and must be updated.  Much appreciation to anyone who automates this
+build process better...
