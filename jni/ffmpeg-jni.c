@@ -348,13 +348,13 @@ cleanup:
 jint Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeGetLocalRtpPort(JNIEnv *env,
         jclass clazz, jint nativeInt) {
     RtpOutputContext *rtpContext = (RtpOutputContext *)nativeInt;
-    return rtp_get_local_rtp_port(rtpContext->urlContext);
+    return ff_rtp_get_local_rtp_port(rtpContext->urlContext);
 }
 
 jint Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeGetLocalRtcpPort(JNIEnv *env,
         jclass clazz, jint nativeInt) {
     RtpOutputContext *rtpContext = (RtpOutputContext *)nativeInt;
-    return rtp_get_local_rtcp_port(rtpContext->urlContext);
+    return ff_rtp_get_local_rtcp_port(rtpContext->urlContext);
 }
 
 static AVFrame *alloc_picture(enum PixelFormat pix_fmt, int width, int height) {
