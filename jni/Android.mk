@@ -51,7 +51,7 @@ include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 
-LOCAL_C_INCLUDES := /home/jasta/software/ffmpeg
+LOCAL_C_INCLUDES := /home/jasta/android/ffmpeg
 LOCAL_LDLIBS := -lz -llog
 LOCAL_STATIC_LIBRARIES := libavformat libavcodec libswscale libavutil libx264
 

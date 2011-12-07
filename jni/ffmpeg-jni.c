@@ -12,6 +12,9 @@
 #include <libavformat/rtsp.h>
 #include <libswscale/swscale.h>
 
+/* XXX: This used to be in ffmpeg... */
+#define MAX_STREAMS 20
+
 #if 1
 #define LOG_TAG "ffmpeg-jni"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
@@ -162,7 +165,7 @@ jstring Java_org_devtcg_rojocam_ffmpeg_FFStreamConfig_nativeGetSDPDescription(JN
         jclass clazz, jint nativeInt) {
     FFStreamConfig *config = (FFStreamConfig *)nativeInt;
     AVFormatContext *avc;
-    AVStream avs[MAX_STREAMS];
+    AVStream *avs = NULL;
     char buf[2048];
     int i;
 
@@ -172,11 +175,14 @@ jstring Java_org_devtcg_rojocam_ffmpeg_FFStreamConfig_nativeGetSDPDescription(JN
         return NULL;
     }
 
-    av_metadata_set2(&avc->metadata, "title",
+    av_dict_set(&avc->metadata, "title",
             config->title ? config->title : "No Title", 0);
 
     avc->nb_streams = config->num_streams;
     snprintf(avc->filename, sizeof(avc->filename), "rtp://0.0.0.0");
+
+    avc->streams = av_malloc(avc->nb_streams * sizeof(*avc->streams));
+    avs = av_malloc(avc->nb_streams * sizeof(*avs));
 
     for (i = 0; i < avc->nb_streams; i++) {
         avc->streams[i] = &avs[i];
@@ -185,8 +191,10 @@ jstring Java_org_devtcg_rojocam_ffmpeg_FFStreamConfig_nativeGetSDPDescription(JN
 
     memset(buf, 0, sizeof(buf));
     avf_sdp_create(&avc, 1, buf, sizeof(buf));
-    av_metadata_free(&avc->metadata);
+    av_free(avc->streams);
+    av_dict_free(&avc->metadata);
     av_free(avc);
+    av_free(avs);
 
     return (*env)->NewStringUTF(env, buf);
 }
@@ -230,7 +238,11 @@ typedef struct {
     uint8_t tempEncodedBuf[200000];
 } RtpOutputContext;
 
-static void av_format_context_free(AVFormatContext *avContext) {
+static void free_av_format_context(AVFormatContext *avContext) {
+    /* XXX: I'm hesitant to call avformat_free_context as we have not taken the
+     * "normal" API flow here by manually constructing this object so much...
+     * */
+    av_free(avContext->streams);
     av_free(avContext);
 }
 
@@ -239,7 +251,7 @@ static void rtp_output_context_free(RtpOutputContext *rtpContext) {
         url_close(rtpContext->urlContext);
     }
     if (rtpContext->avContext != NULL) {
-        av_format_context_free(rtpContext->avContext);
+        free_av_format_context(rtpContext->avContext);
     }
     if (rtpContext->tempFrame != NULL) {
         av_free(rtpContext->tempFrame->data[0]);
@@ -287,6 +299,7 @@ jint Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeCreate(JNIEnv *env,
         goto cleanup;
     }
     avContext->nb_streams = 1;
+    avContext->streams = av_malloc(avContext->nb_streams * sizeof(*avContext->streams));
     avContext->streams[0] = st;
 
     /* XXX: What would we be doing if we supported audio as well? */
@@ -500,7 +513,7 @@ void Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeWriteFrame(JNIEnv *en
         in_time_base.num = 1;
         in_time_base.den = 1000000;
 
-        avContext->pb->is_streamed = 1;
+        avContext->pb->seekable = 0;
         if (pkt.pts != AV_NOPTS_VALUE)
             pkt.pts = av_rescale_q(pkt.pts, in_time_base, outputStream->time_base);
 
