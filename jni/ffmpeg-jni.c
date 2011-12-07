@@ -26,6 +26,7 @@
 #include <libavcodec/opt.h>
 #include <libavformat/avformat.h>
 #include <libavformat/rtsp.h>
+#include <libswscale/swscale.h>
 
 #if 1
 #define LOG_TAG "ffmpeg-jni"
@@ -127,9 +128,9 @@ jint Java_org_devtcg_rojocam_ffmpeg_FFStreamConfig_nativeCreate(JNIEnv *env,
 
     videoEnc->time_base.num = 1;
     videoEnc->time_base.den = 24;
-    videoEnc->bit_rate = 400000;
-    videoEnc->width = 480;
-    videoEnc->height = 320;
+    videoEnc->bit_rate = 800000;
+    videoEnc->width = 640;
+    videoEnc->height = 480;
     videoEnc->pix_fmt = PIX_FMT_YUV420P;
 
     /* This apparently modifies the SDP created by avf_sdp_create.  In my
@@ -234,7 +235,7 @@ typedef struct {
     int64_t lastFrameTime;
 
     /**
-     * Temporary buffer into which we put our frame data.
+     * Temporary buffer into which we put our output frame data.
      */
     AVFrame *tempFrame;
 
@@ -387,15 +388,24 @@ static bool encode_video_frame(AVStream *stream, AVFrame *tempFrame,
         jbyte *data, jlong frameTime, jint frameDuration,
         jint frameFormat, jint frameWidth, jint frameHeight,
         jint frameBitsPerPixel, AVPacket *pkt) {
+    static struct SwsContext *imgConvert;
+    AVFrame frame;
+    AVPicture *picture = (AVPicture *)&frame;
     AVCodecContext *c;
     int n;
 
     c = stream->codec;
 
-    /* Dynamically set the picture buffers each time to avoid excessive data
-     * copy. */
-    tempFrame = avcodec_alloc_frame();
-    avpicture_fill((AVPicture *)tempFrame, data, PIX_FMT_YUV420P, frameWidth, frameHeight);
+    if (imgConvert == NULL) {
+        imgConvert = sws_getContext(frameWidth, frameHeight, PIX_FMT_NV21,
+                c->width, c->height, c->pix_fmt,
+                SWS_BICUBIC, NULL, NULL, NULL);
+    }
+
+    avpicture_fill(picture, data, PIX_FMT_NV21, frameWidth, frameHeight);
+
+    sws_scale(imgConvert, picture->data, picture->linesize, 0,
+            frameHeight, tempFrame->data, tempFrame->linesize);
 
     n = avcodec_encode_video(c, outbuf, outbuf_size, tempFrame);
     if (n > 0) {
@@ -470,19 +480,20 @@ void Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeWriteFrame(JNIEnv *en
     uint8_t *rtp_data;
     int rtp_data_len;
 
+    avContext = rtpContext->avContext;
+    outputStream = avContext->streams[0];
+    codec = outputStream->codec;
+
     /* XXX: frame properties cannot change between invocations of this
      * method... */
     if (rtpContext->tempFrame == NULL) {
-        rtpContext->tempFrame = alloc_picture(PIX_FMT_NV21,
-                frameWidth, frameHeight);
+        rtpContext->tempFrame = alloc_picture(codec->pix_fmt,
+                codec->width, codec->height);
         if (rtpContext->tempFrame == NULL) {
             jniThrowOOM(env);
             return;
         }
     }
-
-    avContext = rtpContext->avContext;
-    outputStream = avContext->streams[0];
 
     data_c = (*env)->GetByteArrayElements(env, data, NULL);
 

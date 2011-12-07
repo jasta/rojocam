@@ -37,9 +37,16 @@ include $(PREBUILT_STATIC_LIBRARY)
 
 include $(CLEAR_VARS)
 
+LOCAL_MODULE := libswscale
+LOCAL_SRC_FILES := libswscale.a
+
+include $(PREBUILT_STATIC_LIBRARY)
+
+include $(CLEAR_VARS)
+
 LOCAL_C_INCLUDES := /home/jasta/software/ffmpeg
 LOCAL_LDLIBS := -lz -llog
-LOCAL_STATIC_LIBRARIES := libavformat libavcodec libavutil
+LOCAL_STATIC_LIBRARIES := libavformat libavcodec libavutil libswscale
 
 LOCAL_MODULE    := ffmpeg-jni
 LOCAL_SRC_FILES := ffmpeg-jni.c
