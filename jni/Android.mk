@@ -16,6 +16,13 @@ LOCAL_PATH := $(call my-dir)
 
 include $(CLEAR_VARS)
 
+LOCAL_MODULE := libx264
+LOCAL_SRC_FILES := libx264.a
+
+include $(PREBUILT_STATIC_LIBRARY)
+
+include $(CLEAR_VARS)
+
 LOCAL_MODULE := libavformat
 LOCAL_SRC_FILES := libavformat.a
 
@@ -46,7 +53,7 @@ include $(CLEAR_VARS)
 
 LOCAL_C_INCLUDES := /home/jasta/software/ffmpeg
 LOCAL_LDLIBS := -lz -llog
-LOCAL_STATIC_LIBRARIES := libavformat libavcodec libavutil libswscale
+LOCAL_STATIC_LIBRARIES := libavformat libavcodec libswscale libavutil libx264
 
 LOCAL_MODULE    := ffmpeg-jni
 LOCAL_SRC_FILES := ffmpeg-jni.c
