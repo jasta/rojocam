@@ -12,3 +12,7 @@ They were built using android-ndk-r7 with the scripts build-x264.sh and
 build-ffmpeg.sh respectively.  build-ffmpeg.sh hardcodes the path to x264
 though and must be updated.  Much appreciation to anyone who automates this
 build process better...
+
+Also note that after my recent ffmpeg update, I am apparently using quite a few
+deprecated APIs I was previously unaware of.  I need to address this at some
+point.
