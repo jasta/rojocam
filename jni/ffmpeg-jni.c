@@ -376,27 +376,6 @@ static AVFrame *alloc_picture(enum PixelFormat pix_fmt, int width, int height) {
     return picture;
 }
 
-/* XXX: Fill with dummy picture data for now, just to confirm the rest of this
- * code works... */
-static void fill_yuv_image(AVFrame *pict, int i, int width, int height) {
-    int x, y;
-
-    /* Y */
-    for(y=0;y<height;y++) {
-        for(x=0;x<width;x++) {
-            pict->data[0][y * pict->linesize[0] + x] = x + y + i * 3;
-        }
-    }
-
-    /* Cb and Cr */
-    for(y=0;y<height/2;y++) {
-        for(x=0;x<width/2;x++) {
-            pict->data[1][y * pict->linesize[1] + x] = 128 + y + i * 2;
-            pict->data[2][y * pict->linesize[2] + x] = 64 + x + i * 5;
-        }
-    }
-}
-
 /**
  * Encode our raw camera picture to an output packet, ultimately to be written
  * using RTP.
@@ -413,28 +392,13 @@ static bool encode_video_frame(AVStream *stream, AVFrame *tempFrame,
 
     c = stream->codec;
 
-    LOGW("encode_video_frame...");
-
     /* Dynamically set the picture buffers each time to avoid excessive data
      * copy. */
     tempFrame = avcodec_alloc_frame();
     avpicture_fill((AVPicture *)tempFrame, data, PIX_FMT_YUV420P, frameWidth, frameHeight);
 
-    LOGW("allocated frame...");
-
-#if 0
-    int pictureSize = avpicture_get_size(PIX_FMT_NV21, frameWidth, frameHeight);
-    int frameSize = (int)(frameWidth * frameHeight * (frameBitsPerPixel / 8.0));
-    assert(pictureSize == frameSize);
-    avpicture_fill((AVPicture *)tempFrame, data, PIX_FMT_NV21, frameWidth, frameHeight);
-#endif
-
-    //fill_yuv_image(tempFrame, frameTime % 25, frameWidth, frameHeight);
-
     n = avcodec_encode_video(c, outbuf, outbuf_size, tempFrame);
     if (n > 0) {
-        LOGI("encoded!");
-
         av_init_packet(pkt);
 
         if (c->coded_frame->key_frame) {
@@ -484,8 +448,6 @@ static ssize_t exhaustive_send(URLContext *urlContext, uint8_t *packetized_data,
             numBytes += n;
         }
     }
-
-    LOGD("total written=%d", (int)numBytes);
 
     return numBytes;
 }

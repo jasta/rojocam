@@ -103,7 +103,6 @@ public class StreamingHeadlessCamcorder extends HeadlessCamcorder {
             ArrayList<RtpOutputContext> toRemove = null;
             for (RtpOutputContext rtpContext: mReceivers) {
                 try {
-                    Log.w(TAG, "writeFrame: now=" + now);
                     rtpContext.writeFrame(data, now,
                             mPreviewFormat, mPreviewSize, mPreviewBitsPerPixel);
                 } catch (IOException e) {
