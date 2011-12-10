@@ -23,6 +23,10 @@ import java.lang.ref.WeakReference;
  * <p>
  * This class is designed to be discarded after the camcorder is stopped. A new
  * instance should be created for each recording session.
+ * <p>
+ * Today we ask that this class be thread-safe around certain conditions but we
+ * do not enforce that. Bugs will likely exist when we introduce multiple peers
+ * due to this.
  */
 public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
     private static final String TAG = HeadlessCamcorder.class.getSimpleName();

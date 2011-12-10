@@ -119,6 +119,8 @@ public abstract class AbstractRtspServer extends Thread {
     public void shutdown() {
         checkIsBound();
 
+        onPreShutdown();
+
         mShutdown = true;
 
         synchronized(mWorkers) {
@@ -131,6 +133,9 @@ public abstract class AbstractRtspServer extends Thread {
             mSocket.close();
         } catch (IOException e) {
         }
+    }
+
+    protected void onPreShutdown() {
     }
 
     public void run() {

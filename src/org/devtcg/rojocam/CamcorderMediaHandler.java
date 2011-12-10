@@ -42,7 +42,7 @@ public class CamcorderMediaHandler implements MediaHandler {
         private final RtpTransport mTransport;
 
         public CamcorderSession(InetAddress client, RtpTransport transport) {
-            System.out.println("New session created for " + client.getHostAddress() +
+            Log.i(TAG, "New session created for " + client.getHostAddress() +
                     ": rtpPort=" + transport.clientRtpPort + ", rtcpPort=" + transport.clientRtcpPort);
             mParticipant = new RtpParticipant(client.getHostAddress(),
                     transport.clientRtpPort, transport.clientRtcpPort);
@@ -60,7 +60,11 @@ public class CamcorderMediaHandler implements MediaHandler {
             /*
              * XXX: We need to tie release() in with session expiration rules!
              * As it stands, we can leak and get into a state of perpetual
-             * streaming!
+             * streaming if the peer just disappears and doesn't let us know.
+             * What we need is to listen for RTCP traffic as a sort of keep
+             * alive and teardown the session if we don't hear back at an
+             * expected interval but I don't really see how we can hook into
+             * that data from FFmpeg at this time.
              */
             mCamcorder = mCamcorderRef.acquire();
 

@@ -8,7 +8,6 @@ import android.graphics.ImageFormat;
 import android.hardware.Camera;
 import android.hardware.Camera.PreviewCallback;
 import android.hardware.Camera.Size;
-import android.os.Looper;
 import android.util.Log;
 
 import java.io.IOException;

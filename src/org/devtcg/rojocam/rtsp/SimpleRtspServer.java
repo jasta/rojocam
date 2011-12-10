@@ -53,6 +53,17 @@ public class SimpleRtspServer extends AbstractRtspServer implements HttpRequestH
         mMethodHandlers.put(RtspMethods.TEARDOWN, new TeardownHandler());
     }
 
+    @Override
+    protected void onPreShutdown() {
+        synchronized (mSessions) {
+            for (RtspSession session: mSessions.values()) {
+                Log.i(TAG, "Force terminating session " + session.getSessionId());
+                session.getMediaSession().onTeardown(null);
+            }
+            mSessions.clear();
+        }
+    }
+
     public synchronized void registerMedia(String feedUri, MediaHandler handler) {
         mMediaHandler = handler;
     }
