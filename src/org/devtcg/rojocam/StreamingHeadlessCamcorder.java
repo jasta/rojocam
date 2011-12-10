@@ -62,6 +62,8 @@ public class StreamingHeadlessCamcorder extends HeadlessCamcorder {
             Log.d(TAG, "  size=" + size.width + "x" + size.height);
         }
 
+        params.setPreviewSize(480, 320);
+
         /*
          * The documentation says NV21 is for image, and NV17 is for video, but
          * it looks like folks are using NV21 for video recording as well...

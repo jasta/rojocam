@@ -179,9 +179,9 @@ jint Java_org_devtcg_rojocam_ffmpeg_FFStreamConfig_nativeCreate(JNIEnv *env,
      * I'd rather stick to the simpler, less variable approach. */
     videoEnc->time_base.num = 1;
     videoEnc->time_base.den = 24;
-    videoEnc->bit_rate = 800000;
-    videoEnc->width = 640;
-    videoEnc->height = 480;
+    videoEnc->bit_rate = 400000;
+    videoEnc->width = 480;
+    videoEnc->height = 320;
     videoEnc->pix_fmt = PIX_FMT_YUV420P;
 
     /* This apparently modifies the SDP created by avf_sdp_create.  In my
