@@ -113,6 +113,9 @@ jint Java_org_devtcg_rojocam_ffmpeg_FFStreamConfig_nativeCreate(JNIEnv *env,
         goto fail;
     }
 
+    /* XXX: We should attempt to encode with parameters that match our camera
+     * preview input to reduce overhead, but being in a proof-of-concept phase
+     * I'd rather stick to the simpler, less variable approach. */
     videoEnc->time_base.num = 1;
     videoEnc->time_base.den = 24;
     videoEnc->bit_rate = 800000;
@@ -395,7 +398,8 @@ static int androidPixFmtToFFmpeg(jint androidPixFmt) {
 
 /**
  * Encode our raw camera picture to an output packet, ultimately to be written
- * using RTP.
+ * using RTP.  The resulting packet has been timescaled to match the output
+ * stream.
  *
  * @return True if the packet was written; false if the picture was buffered.
  */
@@ -421,17 +425,22 @@ static bool encode_video_frame(AVStream *stream, AVFrame *tempFrame,
     sws_scale(imgConvert, picture->data, picture->linesize, 0,
             frameHeight, tempFrame->data, tempFrame->linesize);
 
+    tempFrame->pts = av_rescale_q(frameTime, AV_TIME_BASE_Q, c->time_base);
     n = avcodec_encode_video(c, outbuf, outbuf_size, tempFrame);
     if (n > 0) {
         av_init_packet(pkt);
+
+        if (c->coded_frame->pts != AV_NOPTS_VALUE) {
+            pkt->pts = av_rescale_q(c->coded_frame->pts,
+                    c->time_base, stream->time_base);
+        }
 
         if (c->coded_frame->key_frame) {
             pkt->flags |= AV_PKT_FLAG_KEY;
         }
 
-        pkt->pts = frameTime;
-        pkt->dts = frameTime;
-        pkt->duration = frameDuration;
+        pkt->dts = pkt->pts;
+        pkt->duration = av_rescale_q(frameDuration, AV_TIME_BASE_Q, stream->time_base);
         pkt->stream_index = stream->index;
         pkt->data = outbuf;
         pkt->size = n;
@@ -511,7 +520,6 @@ void Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeWriteFrame(JNIEnv *en
     AVFormatContext *avContext;
     AVCodecContext *codec;
     AVStream *outputStream;
-    AVRational in_time_base;
     AVPacket pkt;
     jbyte *data_c;
     int max_packet_size;
@@ -549,20 +557,10 @@ void Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeWriteFrame(JNIEnv *en
         max_packet_size = url_get_max_packet_size(rtpContext->urlContext);
         url_open_dyn_packet_buf(&avContext->pb, max_packet_size);
 
-        in_time_base.num = 1;
-        in_time_base.den = 1000000;
-
         avContext->pb->seekable = 0;
-        if (pkt.pts != AV_NOPTS_VALUE)
-            pkt.pts = av_rescale_q(pkt.pts, in_time_base, outputStream->time_base);
-
-        if (pkt.dts != AV_NOPTS_VALUE)
-            pkt.dts = av_rescale_q(pkt.dts, in_time_base, outputStream->time_base);
-
-        pkt.duration = av_rescale_q(pkt.duration, in_time_base, outputStream->time_base);
 
         /* This organizes our encoded packet into RTP packet segments (but it
-         * doesn't actually send anything over the network yet. */
+         * doesn't actually send anything over the network yet). */
         if (av_write_frame(avContext, &pkt) < 0) {
             jniThrowException(env, "java/io/IOException", "Error writing frame to output");
         }
