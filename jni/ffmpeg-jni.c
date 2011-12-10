@@ -228,6 +228,12 @@ typedef struct {
     int64_t lastFrameTime;
 
     /**
+     * Context we use to convert our NV21 frames into something our codec can
+     * handle.
+     */
+    struct SwsContext *imgConvert;
+
+    /**
      * Temporary buffer into which we put our output frame data.
      */
     AVFrame *tempFrame;
@@ -255,8 +261,11 @@ static void rtp_output_context_free(RtpOutputContext *rtpContext) {
         free_av_format_context(rtpContext->avContext);
     }
     if (rtpContext->tempFrame != NULL) {
-        av_free(rtpContext->tempFrame->data[0]);
+        avpicture_free((AVPicture *)rtpContext->tempFrame);
         av_free(rtpContext->tempFrame);
+    }
+    if (rtpContext->imgConvert != NULL) {
+        sws_freeContext(rtpContext->imgConvert);
     }
     av_free(rtpContext);
 }
@@ -376,6 +385,14 @@ static AVFrame *alloc_picture(enum PixelFormat pix_fmt, int width, int height) {
     return picture;
 }
 
+static int androidPixFmtToFFmpeg(jint androidPixFmt) {
+    /* See android.graphics.ImageFormat */
+    switch (androidPixFmt) {
+        case 0x11: return PIX_FMT_NV21;
+        default: abort();
+    }
+}
+
 /**
  * Encode our raw camera picture to an output packet, ultimately to be written
  * using RTP.
@@ -383,11 +400,10 @@ static AVFrame *alloc_picture(enum PixelFormat pix_fmt, int width, int height) {
  * @return True if the packet was written; false if the picture was buffered.
  */
 static bool encode_video_frame(AVStream *stream, AVFrame *tempFrame,
-        uint8_t *outbuf, int outbuf_size,
+        struct SwsContext *imgConvert, uint8_t *outbuf, int outbuf_size,
         jbyte *data, jlong frameTime, jint frameDuration,
         jint frameFormat, jint frameWidth, jint frameHeight,
         jint frameBitsPerPixel, AVPacket *pkt) {
-    static struct SwsContext *imgConvert;
     AVFrame frame;
     AVPicture *picture = (AVPicture *)&frame;
     AVCodecContext *c;
@@ -395,13 +411,12 @@ static bool encode_video_frame(AVStream *stream, AVFrame *tempFrame,
 
     c = stream->codec;
 
-    if (imgConvert == NULL) {
-        imgConvert = sws_getContext(frameWidth, frameHeight, PIX_FMT_NV21,
-                c->width, c->height, c->pix_fmt,
-                SWS_BICUBIC, NULL, NULL, NULL);
-    }
-
-    avpicture_fill(picture, data, PIX_FMT_NV21, frameWidth, frameHeight);
+    /* XXX: Hmm, we're resampling here but perhaps this is a mistake.  Why not
+     * just define the codec context to match our input close enough for fast
+     * translation? */
+    avcodec_get_frame_defaults(&frame);
+    avpicture_fill(picture, data, androidPixFmtToFFmpeg(frameFormat),
+            frameWidth, frameHeight);
 
     sws_scale(imgConvert, picture->data, picture->linesize, 0,
             frameHeight, tempFrame->data, tempFrame->linesize);
@@ -425,9 +440,6 @@ static bool encode_video_frame(AVStream *stream, AVFrame *tempFrame,
     } else {
         return false;
     }
-
-    avpicture_free((AVPicture *)tempFrame);
-    av_free(tempFrame);
 }
 
 static ssize_t exhaustive_send(URLContext *urlContext, uint8_t *packetized_data,
@@ -461,6 +473,33 @@ static ssize_t exhaustive_send(URLContext *urlContext, uint8_t *packetized_data,
     return numBytes;
 }
 
+/**
+ * Perform some lazy initialization of the context on the first frame write,
+ * assuming that all future frame writes will have the same dimensions.
+ * Blargh, our API should be restructured.
+ */
+static bool first_frame_init(JNIEnv *env, RtpOutputContext *rtpContext,
+        jint frameFormat, jint frameWidth, jint frameHeight) {
+    AVCodecContext *codec = rtpContext->avContext->streams[0]->codec;
+    rtpContext->tempFrame = alloc_picture(codec->pix_fmt,
+            codec->width, codec->height);
+    if (rtpContext->tempFrame == NULL) {
+        jniThrowOOM(env);
+        return false;
+    }
+
+    rtpContext->imgConvert = sws_getContext(frameWidth, frameHeight,
+            androidPixFmtToFFmpeg(frameFormat),
+            codec->width, codec->height, codec->pix_fmt,
+            SWS_BICUBIC, NULL, NULL, NULL);
+    if (rtpContext->imgConvert == NULL) {
+        jniThrowOOM(env);
+        return false;
+    }
+
+    return true;
+}
+
 /* XXX: This class should really pass the picture parameters by a separate API
  * so that we can, by contract, enforce that the frame size can't suddenly
  * change on us. */
@@ -483,13 +522,10 @@ void Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeWriteFrame(JNIEnv *en
     outputStream = avContext->streams[0];
     codec = outputStream->codec;
 
-    /* XXX: frame properties cannot change between invocations of this
-     * method... */
     if (rtpContext->tempFrame == NULL) {
-        rtpContext->tempFrame = alloc_picture(codec->pix_fmt,
-                codec->width, codec->height);
-        if (rtpContext->tempFrame == NULL) {
-            jniThrowOOM(env);
+        if (!first_frame_init(env, rtpContext, frameFormat,
+                frameWidth, frameHeight)) {
+            LOGE("Error initializing encoding buffers, cannot stream");
             return;
         }
     }
@@ -501,6 +537,7 @@ void Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeWriteFrame(JNIEnv *en
      * it was passed into us already as a raw video frame. */
     int frameDuration = frameTime - rtpContext->lastFrameTime;
     bool frameEncoded = encode_video_frame(outputStream, rtpContext->tempFrame,
+            rtpContext->imgConvert,
             rtpContext->tempEncodedBuf, sizeof(rtpContext->tempEncodedBuf),
             data_c, frameTime, frameDuration, frameFormat,
             frameWidth, frameHeight, frameBitsPerPixel, &pkt);
