@@ -16,7 +16,7 @@ public class RtpOutputContext implements Closeable {
     private final RtpParticipant mPeer;
     private final int mNativeInt;
 
-    private final AtomicBoolean mClosed = new AtomicBoolean();
+    private boolean mClosed;
 
     private RuntimeException mLeakedException =
             new IllegalStateException("Leaked RtpOutputContext detected!");
@@ -29,7 +29,7 @@ public class RtpOutputContext implements Closeable {
     }
 
     private void checkClosed() throws IllegalStateException {
-        if (mClosed.get()) {
+        if (mClosed) {
             throw new IllegalStateException("This instance is already closed");
         }
     }
@@ -39,30 +39,31 @@ public class RtpOutputContext implements Closeable {
         return mNativeInt;
     }
 
-    public RtpParticipant getPeer() {
+    public synchronized RtpParticipant getPeer() {
         checkClosed();
         return mPeer;
     }
 
-    public int getLocalRtpPort() {
+    public synchronized int getLocalRtpPort() {
         checkClosed();
         return nativeGetLocalRtpPort(mNativeInt);
     }
 
-    public int getLocalRtcpPort() {
+    public synchronized int getLocalRtcpPort() {
         checkClosed();
         return nativeGetLocalRtcpPort(mNativeInt);
     }
 
-    public void writeFrame(byte[] data, long nanoTime, int frameFormat, Size frameSize,
+    public synchronized void writeFrame(byte[] data, long nanoTime, int frameFormat, Size frameSize,
             int frameBitsPerPixel) throws IOException {
         checkClosed();
         nativeWriteFrame(mNativeInt, data, nanoTime / 1000, frameFormat,
                 frameSize.width, frameSize.height, frameBitsPerPixel);
     }
 
-    public void close() throws IOException {
-        if (!mClosed.getAndSet(true)) {
+    public synchronized void close() throws IOException {
+        if (!mClosed) {
+            mClosed = true;
             nativeClose(mNativeInt);
         }
     }
@@ -70,10 +71,9 @@ public class RtpOutputContext implements Closeable {
     @Override
     protected void finalize() throws Throwable {
         try {
-            if (!mClosed.get()) {
+            if (!mClosed) {
                 Log.w(TAG, "Leaked RtpOutputContext!", mLeakedException);
             }
-            mLeakedException = null;
         } finally {
             super.finalize();
         }
