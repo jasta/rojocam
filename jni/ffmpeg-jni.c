@@ -158,6 +158,7 @@ fail:
     if (st != NULL) {
         av_free(st);
     }
+    assert((*env)->ExceptionOccurred(env));
     return 0;
 }
 
@@ -338,6 +339,7 @@ jint Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeCreate(JNIEnv *env,
 
 cleanup:
     rtp_output_context_free(rtpContext);
+    assert((*env)->ExceptionOccurred(env));
 
     return 0;
 }
