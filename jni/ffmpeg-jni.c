@@ -182,7 +182,7 @@ jint Java_org_devtcg_rojocam_ffmpeg_FFStreamConfig_nativeCreate(JNIEnv *env,
      * I'd rather stick to the simpler, less variable approach. */
     videoEnc->time_base.num = 1;
     videoEnc->time_base.den = 24;
-    videoEnc->bit_rate = 400000;
+    videoEnc->bit_rate = 180000;
     videoEnc->width = 480;
     videoEnc->height = 320;
     videoEnc->pix_fmt = PIX_FMT_YUV420P;
