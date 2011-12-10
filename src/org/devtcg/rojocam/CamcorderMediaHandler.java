@@ -27,23 +27,9 @@ public class CamcorderMediaHandler implements MediaHandler {
 
     public String onDescribe(String feedUri) {
         String desc = mStreamConfig.getSDPDescription();
-        Log.d(TAG, "desc=" + desc);
+        Log.d(TAG, "SDP:");
+        Log.d(TAG, desc);
         return desc;
-//        /*
-//         * XXX: I haven't bothered to understand this format well enough to
-//         * create a proper builder class.
-//         */
-//        StringBuilder b = new StringBuilder();
-//        b.append("o=- 0 0 IN IP4 127.0.0.1\n");
-//        b.append("t=0 0\n");
-//        b.append("s=No Title\n");
-//        b.append("m=video 0 RTP/AVP 96\n");
-//        b.append("a=rtpmap:96 H263-1998/90000\n");
-//        b.append("a=control:streamid=0\n");
-//        b.append("a=fmtp:96 profile=0; level=40\n");
-//        b.append("a=cliprect:0,0,144,176\n");
-//        b.append("a=framesize:96 176-144\n");
-//        return b.toString();
     }
 
     public MediaSession createSession(InetAddress client, RtpTransport transport) {
