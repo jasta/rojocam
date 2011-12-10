@@ -27,11 +27,13 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, __VA_ARGS__)
+#define LOGV(...) __android_log_print(ANDROID_LOG_VERBOSE, LOG_TAG, __VA_ARGS__)
 #else
 #define LOGE
 #define LOGI
 #define LOGW
 #define LOGD
+#define LOGV
 #endif
 
 static jint jniThrowException(JNIEnv *env, const char *className,
@@ -63,7 +65,18 @@ static void dalvik_log_callback(void *ptr, int level, const char *fmt, va_list v
 
     while ((line_ptr = strchr(line, '\n'))) {
         *line_ptr = '\0';
-        LOGD("[ffmpeg] %s", line);
+        const char *outfmt = "[ffmpeg] %s";
+        switch (level) {
+            case AV_LOG_QUIET:
+            case AV_LOG_PANIC:
+            case AV_LOG_FATAL:
+            case AV_LOG_ERROR:    LOGE(outfmt, line); break;
+            case AV_LOG_WARNING:  LOGW(outfmt, line); break;
+            case AV_LOG_INFO:     LOGI(outfmt, line); break;
+            case AV_LOG_VERBOSE:  LOGV(outfmt, line); break;
+            case AV_LOG_DEBUG:
+            default:              LOGD(outfmt, line); break;
+        }
         strcpy(line, line_ptr + 1);
     }
 }
