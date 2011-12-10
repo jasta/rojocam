@@ -85,6 +85,9 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     /* Register all formats. */
     av_register_all();
 
+    /* No-op on Linux I think, but ffmpeg bitches if I don't call this. */
+    avformat_network_init();
+
     /* Capture ffmpeg logging. */
     av_log_set_callback(dalvik_log_callback);
 
