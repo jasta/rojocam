@@ -66,164 +66,164 @@ import java.util.HashSet;
  * Apache, Kudos.
  */
 public abstract class AbstractRtspServer extends Thread {
-	public static final String TAG = AbstractRtspServer.class.getSimpleName();
+    public static final String TAG = AbstractRtspServer.class.getSimpleName();
 
-	protected final HashSet<WorkerThread> mWorkers =
-	        new HashSet<WorkerThread>();
+    protected final HashSet<WorkerThread> mWorkers =
+            new HashSet<WorkerThread>();
 
-	protected ServerSocket mSocket;
-	protected final HttpParams mParams;
-	private HttpRequestHandler mReqHandler;
+    protected ServerSocket mSocket;
+    protected final HttpParams mParams;
+    private HttpRequestHandler mReqHandler;
 
     private volatile boolean mShutdown;
 
-	public AbstractRtspServer() {
-		super(TAG);
+    public AbstractRtspServer() {
+        super(TAG);
 
         /*
          * XXX: Android as a client seems very unhappy if the RTSP connection is
          * closed so we must use an SO_TIMEOUT of infinite to avoid that. The
          * client can close when it wants to.
          */
-		mParams = new BasicHttpParams()
-		        .setIntParameter(CoreConnectionPNames.SO_TIMEOUT, 0)
-		        .setIntParameter(CoreConnectionPNames.SOCKET_BUFFER_SIZE, 16384)
-		        .setBooleanParameter(CoreConnectionPNames.STALE_CONNECTION_CHECK, false)
-		        .setBooleanParameter(CoreConnectionPNames.TCP_NODELAY, true);
+        mParams = new BasicHttpParams()
+                .setIntParameter(CoreConnectionPNames.SO_TIMEOUT, 0)
+                .setIntParameter(CoreConnectionPNames.SOCKET_BUFFER_SIZE, 16384)
+                .setBooleanParameter(CoreConnectionPNames.STALE_CONNECTION_CHECK, false)
+                .setBooleanParameter(CoreConnectionPNames.TCP_NODELAY, true);
 
-		setDaemon(true);
-	}
+        setDaemon(true);
+    }
 
-	public void bind(InetSocketAddress addr) throws IOException {
-		ServerSocket socket = new ServerSocket();
-		socket.bind(addr);
-		mSocket = socket;
-		Log.i(TAG, "Bound to port " + mSocket.getLocalPort());
-	}
+    public void bind(InetSocketAddress addr) throws IOException {
+        ServerSocket socket = new ServerSocket();
+        socket.bind(addr);
+        mSocket = socket;
+        Log.i(TAG, "Bound to port " + mSocket.getLocalPort());
+    }
 
-	public void setRequestHandler(HttpRequestHandler handler) {
-		mReqHandler = handler;
-	}
+    public void setRequestHandler(HttpRequestHandler handler) {
+        mReqHandler = handler;
+    }
 
-	private void checkIsBound() {
-	    if (mSocket == null) {
-	        throw new IllegalStateException("Not bound.");
-	    }
-	}
+    private void checkIsBound() {
+        if (mSocket == null) {
+            throw new IllegalStateException("Not bound.");
+        }
+    }
 
-	public int getPort() {
-	    checkIsBound();
-		return mSocket.getLocalPort();
-	}
+    public int getPort() {
+        checkIsBound();
+        return mSocket.getLocalPort();
+    }
 
-	public void shutdown() {
-	    checkIsBound();
+    public void shutdown() {
+        checkIsBound();
 
-	    mShutdown = true;
+        mShutdown = true;
 
-	    synchronized(mWorkers) {
-	        for (WorkerThread worker: mWorkers) {
-	            worker.shutdown();
-	        }
-	    }
+        synchronized(mWorkers) {
+            for (WorkerThread worker: mWorkers) {
+                worker.shutdown();
+            }
+        }
 
-	    try {
-	        mSocket.close();
-	    } catch (IOException e) {
-	    }
-	}
+        try {
+            mSocket.close();
+        } catch (IOException e) {
+        }
+    }
 
-	public void run() {
-	    checkIsBound();
-		if (mReqHandler == null) {
-		    throw new IllegalStateException("Request handler not set.");
-		}
+    public void run() {
+        checkIsBound();
+        if (mReqHandler == null) {
+            throw new IllegalStateException("Request handler not set.");
+        }
 
-		while (!mShutdown) {
-			try {
-				Socket sock = mSocket.accept();
-				RtspServerConnection conn = new RtspServerConnection();
+        while (!mShutdown) {
+            try {
+                Socket sock = mSocket.accept();
+                RtspServerConnection conn = new RtspServerConnection();
 
-				conn.bind(sock, mParams);
+                conn.bind(sock, mParams);
 
-				BasicHttpProcessor processor = new BasicHttpProcessor();
-				processor.addInterceptor(new ResponseContent());
-				processor.addInterceptor(new ResponseHeaderEcho(RtspHeaders.CSEQ));
-				processor.addInterceptor(new ResponseDate());
-				processor.addInterceptor(new ResponseHeaderEcho(RtspHeaders.SESSION));
+                BasicHttpProcessor processor = new BasicHttpProcessor();
+                processor.addInterceptor(new ResponseContent());
+                processor.addInterceptor(new ResponseHeaderEcho(RtspHeaders.CSEQ));
+                processor.addInterceptor(new ResponseDate());
+                processor.addInterceptor(new ResponseHeaderEcho(RtspHeaders.SESSION));
 
-				HttpRequestHandlerRegistry reg = new HttpRequestHandlerRegistry();
-				reg.register("*", mReqHandler);
+                HttpRequestHandlerRegistry reg = new HttpRequestHandlerRegistry();
+                reg.register("*", mReqHandler);
 
-				RtspService svc = new RtspService(processor,
-				        new RtspConnectionReuseStrategy(), new DefaultHttpResponseFactory());
+                RtspService svc = new RtspService(processor,
+                        new RtspConnectionReuseStrategy(), new DefaultHttpResponseFactory());
 
-				svc.setParams(mParams);
-				svc.setHandlerResolver(reg);
+                svc.setParams(mParams);
+                svc.setHandlerResolver(reg);
 
-				WorkerThread worker = new WorkerThread(svc, conn);
+                WorkerThread worker = new WorkerThread(svc, conn);
 
-				synchronized(mWorkers) {
-					mWorkers.add(worker);
-				}
+                synchronized(mWorkers) {
+                    mWorkers.add(worker);
+                }
 
-				worker.setDaemon(true);
-				worker.start();
-			} catch (IOException e) {
-			    if (!mShutdown) {
-			        Log.e(TAG, "I/O error initializing connection thread", e);
-			    }
-				break;
-			}
-		}
-	}
+                worker.setDaemon(true);
+                worker.start();
+            } catch (IOException e) {
+                if (!mShutdown) {
+                    Log.e(TAG, "I/O error initializing connection thread", e);
+                }
+                break;
+            }
+        }
+    }
 
-	private class WorkerThread extends Thread {
-		private final RtspService mService;
-		private final RtspServerConnection mConn;
+    private class WorkerThread extends Thread {
+        private final RtspService mService;
+        private final RtspServerConnection mConn;
 
-		public WorkerThread(RtspService svc, RtspServerConnection conn) {
-			super();
-			mService = svc;
-			mConn = conn;
-		}
+        public WorkerThread(RtspService svc, RtspServerConnection conn) {
+            super();
+            mService = svc;
+            mConn = conn;
+        }
 
-		public void run() {
-			HttpContext ctx = new BasicHttpContext(null);
+        public void run() {
+            HttpContext ctx = new BasicHttpContext(null);
 
-			try {
-				while (!mShutdown && mConn.isOpen()) {
-					mService.handleRequest(mConn, ctx);
-				}
-			} catch (Exception e) {
-			    if (!mShutdown) {
-			        Log.e(TAG, "RTSP server disrupted: " + e.toString());
-			    }
-			} finally {
-				if (!mShutdown) {
-					try {
-						mConn.shutdown();
-					} catch (IOException e) {
-					}
+            try {
+                while (!mShutdown && mConn.isOpen()) {
+                    mService.handleRequest(mConn, ctx);
+                }
+            } catch (Exception e) {
+                if (!mShutdown) {
+                    Log.e(TAG, "RTSP server disrupted: " + e.toString());
+                }
+            } finally {
+                if (!mShutdown) {
+                    try {
+                        mConn.shutdown();
+                    } catch (IOException e) {
+                    }
 
-					synchronized(mWorkers) {
-						mWorkers.remove(this);
-					}
-				}
-			}
-		}
+                    synchronized(mWorkers) {
+                        mWorkers.remove(this);
+                    }
+                }
+            }
+        }
 
-		public void shutdown() {
-			try {
-				mConn.shutdown();
-			} catch (IOException e) {
-			}
-		}
-	}
+        public void shutdown() {
+            try {
+                mConn.shutdown();
+            } catch (IOException e) {
+            }
+        }
+    }
 
-	private static class RtspService extends HttpService {
-	    private HttpProcessor processor;
-	    private ConnectionReuseStrategy connStrategy;
+    private static class RtspService extends HttpService {
+        private HttpProcessor processor;
+        private ConnectionReuseStrategy connStrategy;
         private HttpResponseFactory responseFactory;
 
         public RtspService(HttpProcessor proc, ConnectionReuseStrategy connStrategy,
@@ -296,40 +296,40 @@ public abstract class AbstractRtspServer extends Thread {
                 conn.close();
             }
         }
-	}
+    }
 
-	private static class RtspServerConnection extends DefaultHttpServerConnection {
-	    @Override
-	    protected HttpMessageParser createRequestParser(SessionInputBuffer buffer,
-	            HttpRequestFactory requestFactory, HttpParams params) {
-	        return new HttpRequestParser(buffer, new BasicLineParser(RtspVersion.RTSP_1_0),
-	                requestFactory, params);
-	    }
+    private static class RtspServerConnection extends DefaultHttpServerConnection {
+        @Override
+        protected HttpMessageParser createRequestParser(SessionInputBuffer buffer,
+                HttpRequestFactory requestFactory, HttpParams params) {
+            return new HttpRequestParser(buffer, new BasicLineParser(RtspVersion.RTSP_1_0),
+                    requestFactory, params);
+        }
 
         @Override
         protected HttpRequestFactory createHttpRequestFactory() {
             return new RtspRequestFactory();
         }
-	}
+    }
 
-	private static class RtspRequestFactory implements HttpRequestFactory {
-	    private static final String[] SUPPORTED_METHODS = {
+    private static class RtspRequestFactory implements HttpRequestFactory {
+        private static final String[] SUPPORTED_METHODS = {
             RtspMethods.OPTIONS,
-	        RtspMethods.DESCRIBE,
-	        RtspMethods.PAUSE,
-	        RtspMethods.PLAY,
-	        RtspMethods.SETUP,
-	        RtspMethods.TEARDOWN,
-	    };
+            RtspMethods.DESCRIBE,
+            RtspMethods.PAUSE,
+            RtspMethods.PLAY,
+            RtspMethods.SETUP,
+            RtspMethods.TEARDOWN,
+        };
 
-	    private static boolean isOneOf(final String[] haystack, final String needle) {
-	        for (int i = 0; i < haystack.length; i++) {
-	            if (haystack[i].equalsIgnoreCase(needle)) {
-	                return true;
-	            }
-	        }
-	        return false;
-	    }
+        private static boolean isOneOf(final String[] haystack, final String needle) {
+            for (int i = 0; i < haystack.length; i++) {
+                if (haystack[i].equalsIgnoreCase(needle)) {
+                    return true;
+                }
+            }
+            return false;
+        }
 
         public HttpRequest newHttpRequest(RequestLine requestline)
                 throws MethodNotSupportedException {
@@ -350,9 +350,9 @@ public abstract class AbstractRtspServer extends Thread {
             }
         }
 
-	}
+    }
 
-	private static class RtspConnectionReuseStrategy implements ConnectionReuseStrategy {
+    private static class RtspConnectionReuseStrategy implements ConnectionReuseStrategy {
         public boolean keepAlive(HttpResponse response, HttpContext context) {
             HttpConnection conn = (HttpConnection)
                     context.getAttribute(ExecutionContext.HTTP_CONNECTION);
@@ -363,27 +363,27 @@ public abstract class AbstractRtspServer extends Thread {
 
             return true;
         }
-	}
+    }
 
-	@SuppressWarnings("serial")
+    @SuppressWarnings("serial")
     private static class RtspVersion extends ProtocolVersion {
-	    public static final RtspVersion RTSP_1_0 = new RtspVersion(1, 0);
+        public static final RtspVersion RTSP_1_0 = new RtspVersion(1, 0);
 
-	    public RtspVersion(int major, int minor) {
-	        super("RTSP", major, minor);
-	    }
-	}
+        public RtspVersion(int major, int minor) {
+            super("RTSP", major, minor);
+        }
+    }
 
     /**
      * Simple response interceptor that echoes back a specific header sent by
      * the request if present.
      */
-	private static class ResponseHeaderEcho implements HttpResponseInterceptor {
-	    private final String mHeader;
+    private static class ResponseHeaderEcho implements HttpResponseInterceptor {
+        private final String mHeader;
 
-	    public ResponseHeaderEcho(String header) {
-	        mHeader = header;
-	    }
+        public ResponseHeaderEcho(String header) {
+            mHeader = header;
+        }
 
         public void process(HttpResponse response, HttpContext context) throws HttpException,
                 IOException {
@@ -395,5 +395,5 @@ public abstract class AbstractRtspServer extends Thread {
                 }
             }
         }
-	}
+    }
 }
