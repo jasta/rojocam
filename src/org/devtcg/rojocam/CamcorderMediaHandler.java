@@ -93,6 +93,7 @@ public class CamcorderMediaHandler implements MediaHandler {
         }
 
         public void onTeardown(String feedUri) {
+            mCamcorder.removeReceiver(mRtpOutputContext);
             try {
                 mRtpOutputContext.close();
             } catch (IOException e) {

@@ -3,16 +3,23 @@ package org.devtcg.rojocam.ffmpeg;
 import org.devtcg.rojocam.rtsp.RtpParticipant;
 
 import android.hardware.Camera.Size;
+import android.util.Log;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class RtpOutputContext implements Closeable {
+    private static final String TAG = RtpOutputContext.class.getSimpleName();
+
     private final FFStreamConfig mStreamConfig;
     private final RtpParticipant mPeer;
     private final int mNativeInt;
 
-    private boolean mClosed;
+    private final AtomicBoolean mClosed = new AtomicBoolean();
+
+    private RuntimeException mLeakedException =
+            new IllegalStateException("Leaked RtpOutputContext detected!");
 
     public RtpOutputContext(FFStreamConfig streamConfig, RtpParticipant peer) throws IOException {
         mStreamConfig = streamConfig;
@@ -21,31 +28,41 @@ public class RtpOutputContext implements Closeable {
                 peer.hostAddress, peer.rtpPort);
     }
 
+    private void checkClosed() throws IllegalStateException {
+        if (mClosed.get()) {
+            throw new IllegalStateException("This instance is already closed");
+        }
+    }
+
     int nativeInt() {
+        checkClosed();
         return mNativeInt;
     }
 
     public RtpParticipant getPeer() {
+        checkClosed();
         return mPeer;
     }
 
     public int getLocalRtpPort() {
+        checkClosed();
         return nativeGetLocalRtpPort(mNativeInt);
     }
 
     public int getLocalRtcpPort() {
+        checkClosed();
         return nativeGetLocalRtcpPort(mNativeInt);
     }
 
     public void writeFrame(byte[] data, long nanoTime, int frameFormat, Size frameSize,
             int frameBitsPerPixel) throws IOException {
+        checkClosed();
         nativeWriteFrame(mNativeInt, data, nanoTime / 1000, frameFormat,
                 frameSize.width, frameSize.height, frameBitsPerPixel);
     }
 
     public void close() throws IOException {
-        if (!mClosed) {
-            mClosed = true;
+        if (!mClosed.getAndSet(true)) {
             nativeClose(mNativeInt);
         }
     }
@@ -53,7 +70,10 @@ public class RtpOutputContext implements Closeable {
     @Override
     protected void finalize() throws Throwable {
         try {
-            close();
+            if (!mClosed.get()) {
+                Log.w(TAG, "Leaked RtpOutputContext!", mLeakedException);
+            }
+            mLeakedException = null;
         } finally {
             super.finalize();
         }
