@@ -12,6 +12,12 @@
 #include <libavformat/rtsp.h>
 #include <libswscale/swscale.h>
 
+/**
+ * If non-zero, debugging will be produced that shows wall timings during
+ * critical phases of the frame writing process.
+ */
+#define PROFILE_WRITE_FRAME 1
+
 /* XXX: This used to be in ffmpeg... */
 #define MAX_STREAMS 20
 
@@ -70,6 +76,48 @@ jint JNI_OnLoad(JavaVM *vm, void *reserved) {
     av_log_set_callback(dalvik_log_callback);
 
     return JNI_VERSION_1_4;
+}
+
+/*****************************************************************************/
+/* timing helpers                                                            */
+/*****************************************************************************/
+
+/* Subtract the `struct timeval' values X and Y,
+   storing the result in RESULT.
+   Return 1 if the difference is negative, otherwise 0.  */
+int timeval_subtract(struct timeval *result, struct timeval *x,
+         struct timeval *y) {
+    /* Perform the carry for the later subtraction by updating y. */
+    if (x->tv_usec < y->tv_usec) {
+        int nsec = (y->tv_usec - x->tv_usec) / 1000000 + 1;
+        y->tv_usec -= 1000000 * nsec;
+        y->tv_sec += nsec;
+    }
+    if (x->tv_usec - y->tv_usec > 1000000) {
+        int nsec = (x->tv_usec - y->tv_usec) / 1000000;
+        y->tv_usec += 1000000 * nsec;
+        y->tv_sec -= nsec;
+    }
+
+    /* Compute the time remaining to wait.
+     tv_usec is certainly positive. */
+    result->tv_sec = x->tv_sec - y->tv_sec;
+    result->tv_usec = x->tv_usec - y->tv_usec;
+
+    /* Return 1 if result is negative. */
+    return x->tv_sec < y->tv_sec;
+}
+
+static void print_elapsed(const char *str, struct timeval *then) {
+    struct timeval now, elapsed;
+    long elapsed_msec;
+
+    gettimeofday(&now, NULL);
+    timeval_subtract(&elapsed, &now, then);
+
+    elapsed_msec = (elapsed.tv_sec * 1000) + (elapsed.tv_usec / 1000);
+
+    LOGD("%s took %ld msec", str, elapsed_msec);
 }
 
 /*****************************************************************************/
@@ -415,6 +463,11 @@ static bool encode_video_frame(AVStream *stream, AVFrame *tempFrame,
 
     c = stream->codec;
 
+#if PROFILE_WRITE_FRAME
+    struct timeval then;
+    gettimeofday(&then, NULL);
+#endif
+
     /* XXX: Hmm, we're resampling here but perhaps this is a mistake.  Why not
      * just define the codec context to match our input close enough for fast
      * translation? */
@@ -425,8 +478,18 @@ static bool encode_video_frame(AVStream *stream, AVFrame *tempFrame,
     sws_scale(imgConvert, picture->data, picture->linesize, 0,
             frameHeight, tempFrame->data, tempFrame->linesize);
 
+#if PROFILE_WRITE_FRAME
+    print_elapsed("Resampling", &then);
+#endif
+
+#if PROFILE_WRITE_FRAME
+    gettimeofday(&then, NULL);
+#endif
     tempFrame->pts = av_rescale_q(frameTime, AV_TIME_BASE_Q, c->time_base);
     n = avcodec_encode_video(c, outbuf, outbuf_size, tempFrame);
+#if PROFILE_WRITE_FRAME
+    print_elapsed("Encoding", &then);
+#endif
     if (n > 0) {
         av_init_packet(pkt);
 
@@ -554,6 +617,11 @@ void Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeWriteFrame(JNIEnv *en
     (*env)->ReleaseByteArrayElements(env, data, data_c, JNI_ABORT);
 
     if (frameEncoded) {
+#if PROFILE_WRITE_FRAME
+        struct timeval then;
+        gettimeofday(&then, NULL);
+#endif
+
         max_packet_size = url_get_max_packet_size(rtpContext->urlContext);
         url_open_dyn_packet_buf(&avContext->pb, max_packet_size);
 
@@ -572,6 +640,10 @@ void Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeWriteFrame(JNIEnv *en
 
         /* XXX: I dunno, ffserver.c does this... */
         outputStream->codec->frame_number++;
+
+#if PROFILE_WRITE_FRAME
+        print_elapsed("Writing", &then);
+#endif
     }
 }
 

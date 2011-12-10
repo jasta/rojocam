@@ -12,6 +12,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class RtpOutputContext implements Closeable {
     private static final String TAG = RtpOutputContext.class.getSimpleName();
 
+    private static final boolean FRAMERATE_DEBUG = true;
+    private long mNumFrames;
+    private long mStartPTS;
+    private int mNumFramesThisSecond;
+    private long mStartPTSThisSecond;
+
     private final FFStreamConfig mStreamConfig;
     private final RtpParticipant mPeer;
     private final int mNativeInt;
@@ -54,10 +60,28 @@ public class RtpOutputContext implements Closeable {
         return nativeGetLocalRtcpPort(mNativeInt);
     }
 
-    public synchronized void writeFrame(byte[] data, long nanoTime, int frameFormat, Size frameSize,
+    public synchronized void writeFrame(byte[] data, long usecTime, int frameFormat, Size frameSize,
             int frameBitsPerPixel) throws IOException {
         checkClosed();
-        nativeWriteFrame(mNativeInt, data, nanoTime / 1000, frameFormat,
+        if (FRAMERATE_DEBUG) {
+            if (mStartPTS == 0) {
+                mStartPTS = usecTime;
+            }
+            if (mStartPTSThisSecond == 0) {
+                mStartPTSThisSecond = usecTime;
+            }
+            long elapsed = usecTime - mStartPTSThisSecond;
+            mNumFrames++;
+            mNumFramesThisSecond++;
+            if (elapsed >= 1000000) {
+                double fps = mNumFramesThisSecond / (elapsed / 1000000.0);
+                double avgFps = mNumFrames / ((usecTime - mStartPTS) / 1000000.0);
+                Log.d(TAG, String.format("Avg. fps=%.02f, current fps=%.02f", avgFps, fps));
+                mNumFramesThisSecond = 0;
+                mStartPTSThisSecond = usecTime;
+            }
+        }
+        nativeWriteFrame(mNativeInt, data, usecTime, frameFormat,
                 frameSize.width, frameSize.height, frameBitsPerPixel);
     }
 

@@ -99,7 +99,7 @@ public class StreamingHeadlessCamcorder extends HeadlessCamcorder {
              * thread, using a sort of frame ringbuffer to keep the preview
              * frames going.
              */
-            long now = System.nanoTime();
+            long now = System.nanoTime() / 1000;
             ArrayList<RtpOutputContext> toRemove = null;
             for (RtpOutputContext rtpContext: mReceivers) {
                 try {
