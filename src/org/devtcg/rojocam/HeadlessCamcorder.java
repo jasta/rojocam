@@ -61,7 +61,7 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
         mContext = new WeakReference<Context>(context);
     }
 
-    private Context getContext() {
+    protected Context getContext() {
         Context context = mContext.get();
         if (context == null) {
             throw new AssertionError();

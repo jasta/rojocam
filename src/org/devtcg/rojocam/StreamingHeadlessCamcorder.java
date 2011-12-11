@@ -1,23 +1,45 @@
 package org.devtcg.rojocam;
 
+import org.devtcg.rojocam.UserAlertHelper.SubjectWarning;
 import org.devtcg.rojocam.ffmpeg.RtpOutputContext;
+import org.devtcg.rojocam.ffmpeg.SwsScaler;
 import org.devtcg.rojocam.util.IOUtils;
 
 import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.hardware.Camera;
+import android.hardware.Camera.Parameters;
 import android.hardware.Camera.PreviewCallback;
 import android.hardware.Camera.Size;
 import android.util.Log;
 
 import java.io.IOException;
 import java.net.SocketException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 public class StreamingHeadlessCamcorder extends HeadlessCamcorder {
     private static final String TAG = StreamingHeadlessCamcorder.class.getSimpleName();
+
+    /**
+     * We offer a way to warn the camera subject that they are about to be
+     * filmed by playing a sound (see UserAlertHelper) and also by flashing the
+     * camera's LED for a period before actually sending the live camera feed.
+     * This is part of a soon-to-be configurable policy to protect the privacy
+     * of individuals that may be under surveillance (e.g. my girlfriend).
+     */
+    private SubjectWarning mSubjectWarning;
+
+    /**
+     * Generated frame explaining that the subject warning system is in effect.
+     */
+    private static FrameBuf sPleaseWaitFrame;
+
+    private boolean mCanDoTorch;
 
     private int mPreviewFormat;
     private Size mPreviewSize;
@@ -45,9 +67,24 @@ public class StreamingHeadlessCamcorder extends HeadlessCamcorder {
         mReceivers.remove(rtpContext);
     }
 
+    private static boolean isTorchModeSupported(Camera.Parameters params) {
+        List<String> flashModes = params.getSupportedFlashModes();
+        for (String flashMode: flashModes) {
+            if (flashMode.equals(Camera.Parameters.FLASH_MODE_TORCH)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     protected void onRecorderInitialized(Camera camera) {
         Camera.Parameters params = camera.getParameters();
+
+        mSubjectWarning = new SubjectWarning();
+        mCanDoTorch = isTorchModeSupported(params);
+
+        params.setFlashMode(Parameters.FLASH_MODE_TORCH);
 
         List<Integer> formats = params.getSupportedPreviewFormats();
         Log.d(TAG, "Supported formats:");
@@ -78,9 +115,7 @@ public class StreamingHeadlessCamcorder extends HeadlessCamcorder {
         camera.setPreviewCallbackWithBuffer(mPreviewCallback);
 
         Size size = mPreviewSize;
-        float bytesPerPixel = mPreviewBitsPerPixel / 8f;
-        int bufSize = (int)(size.width * size.height * bytesPerPixel);
-        byte[] buf = new byte[bufSize];
+        byte[] buf = new FrameBuf(size.width, size.height, mPreviewFormat).getBuffer();
         camera.addCallbackBuffer(buf);
     }
 
@@ -91,8 +126,64 @@ public class StreamingHeadlessCamcorder extends HeadlessCamcorder {
         }
     }
 
+    private static synchronized byte[] getPleaseWaitFrame(Context context, Size size, int pixelFormat) {
+        if (sPleaseWaitFrame == null ||
+                !sPleaseWaitFrame.compatibleWith(size.width, size.height, pixelFormat)) {
+            sPleaseWaitFrame = new FrameBuf(size.width, size.height, pixelFormat);
+            Bitmap source = BitmapFactory.decodeResource(context.getResources(),
+                    R.drawable.subject_warning_image);
+
+            ByteBuffer sourceBuf = ByteBuffer.allocate(source.getRowBytes() * source.getHeight());
+            source.copyPixelsToBuffer(sourceBuf);
+            sourceBuf.rewind();
+
+            byte[] sourceData = sourceBuf.array();
+            byte[] destData = sPleaseWaitFrame.getBuffer();
+
+            SwsScaler.scale(sourceData, SwsScaler.androidBitmapConfigToPixelFormat(source.getConfig()),
+                    source.getWidth(), source.getHeight(),
+                    destData, SwsScaler.androidImageFormatToPixelFormat(pixelFormat),
+                    size.width, size.height);
+        }
+        return sPleaseWaitFrame.getBuffer();
+    }
+
     private final PreviewCallback mPreviewCallback = new PreviewCallback() {
+        private boolean mLedOn;
+
+        private void setLedOn(Camera camera, boolean ledOn) {
+            if (mCanDoTorch && ledOn != mLedOn) {
+                Camera.Parameters params = camera.getParameters();
+                params.setFlashMode(ledOn ? Camera.Parameters.FLASH_MODE_TORCH :
+                        Camera.Parameters.FLASH_MODE_OFF);
+                camera.setParameters(params);
+                mLedOn = ledOn;
+            }
+        }
+
         public void onPreviewFrame(byte[] data, Camera camera) {
+            if (mSubjectWarning != null) {
+                if (!mSubjectWarning.isWarningPeriodActive()) {
+                    setLedOn(camera, false);
+                    mSubjectWarning = null;
+                } else {
+                    setLedOn(camera, mSubjectWarning.getLedState());
+                }
+            }
+            if (mSubjectWarning != null) {
+                /**
+                 * If the subject warning system is active, send a special
+                 * "coming soon" type of image to the peer while we give the
+                 * subject time to react.
+                 */
+                sendFrame(getPleaseWaitFrame(getContext(), mPreviewSize, mPreviewFormat));
+            } else {
+                sendFrame(data);
+            }
+            camera.addCallbackBuffer(data);
+        }
+
+        private void sendFrame(byte[] data) {
             /*
              * XXX: We're attempting to send out the encoded frames to all
              * participants as fast as they come in but obviously this doesn't
@@ -121,9 +212,33 @@ public class StreamingHeadlessCamcorder extends HeadlessCamcorder {
                     mReceivers.remove(toRemove.get(i));
                 }
             }
-
-            camera.addCallbackBuffer(data);
         }
     };
-}
 
+    private static class FrameBuf {
+        private final int width;
+        private final int height;
+        private final int pixelFormat;
+
+        private final byte[] buf;
+
+        public FrameBuf(int width, int height, int pixelFormat) {
+            float bytesPerPixel = ImageFormat.getBitsPerPixel(pixelFormat) / 8f;
+            int bufSize = (int)(width * height * bytesPerPixel);
+            buf = new byte[bufSize];
+
+            this.width = width;
+            this.height = height;
+            this.pixelFormat = pixelFormat;
+        }
+
+        public boolean compatibleWith(int width, int height, int pixelFormat) {
+            return (this.width == width && this.height == height &&
+                    this.pixelFormat == pixelFormat);
+        }
+
+        public byte[] getBuffer() {
+            return buf;
+        }
+    }
+}

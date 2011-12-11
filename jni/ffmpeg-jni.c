@@ -51,6 +51,10 @@ static jint jniThrowOOM(JNIEnv *env) {
     return jniThrowException(env, "java/lang/OutOfMemoryError", NULL);
 }
 
+static jint jniThrowNPE(JNIEnv *env, const char *msg) {
+    return jniThrowException(env, "java/lang/NullPointerException", msg);
+}
+
 /*****************************************************************************/
 /* init...                                                                   */
 /*****************************************************************************/
@@ -668,3 +672,100 @@ jint Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeClose(JNIEnv *env,
     RtpOutputContext *rtpContext = (RtpOutputContext *)nativeInt;
     rtp_output_context_free(rtpContext);
 }
+
+/*****************************************************************************/
+/* org.devtcg.rojocam.ffmpeg.SwsScaler                                       */
+/*****************************************************************************/
+
+typedef struct {
+    struct SwsContext *swsContext;
+    int srcPixFmt;
+    int srcWidth;
+    int srcHeight;
+    int dstPixFmt;
+    int dstWidth;
+    int dstHeight;
+} SwsScaler;
+
+static void swsscaler_free(SwsScaler *scaler) {
+    if (scaler->swsContext != NULL) {
+        sws_freeContext(scaler->swsContext);
+    }
+    av_free(scaler);
+}
+
+jint Java_org_devtcg_rojocam_ffmpeg_SwsScaler_nativeCreate(JNIEnv *env,
+        jclass clazz,
+        jint srcPixFmt, jint srcWidth, jint srcHeight,
+        jint dstPixFmt, jint dstWidth, jint dstHeight, jint flags) {
+    SwsScaler *scaler = NULL;
+
+    scaler = av_mallocz(sizeof(SwsScaler));
+    if (scaler == NULL) {
+        jniThrowOOM(env);
+        goto cleanup;
+    }
+
+    scaler->swsContext = sws_getCachedContext(NULL,
+            srcWidth, srcHeight, srcPixFmt,
+            dstWidth, dstHeight, dstPixFmt, flags, NULL, NULL, NULL);
+    if (scaler->swsContext == NULL) {
+        jniThrowOOM(env);
+        goto cleanup;
+    }
+
+    scaler->srcPixFmt = srcPixFmt;
+    scaler->srcWidth = srcWidth;
+    scaler->srcHeight = srcHeight;
+    scaler->dstPixFmt = dstPixFmt;
+    scaler->dstWidth = dstWidth;
+    scaler->dstHeight = dstHeight;
+
+    return (jint)scaler;
+
+cleanup:
+    swsscaler_free(scaler);
+    assert((*env)->ExceptionOccurred(env));
+
+    return 0;
+}
+
+void Java_org_devtcg_rojocam_ffmpeg_SwsScaler_nativeScale(JNIEnv *env,
+        jclass clazz, jint nativeInt, jbyteArray src, jbyteArray dst) {
+    SwsScaler *scaler;
+    AVPicture srcPic;
+    AVPicture dstPic;
+    jbyte *src_c;
+    jbyte *dst_c;
+
+    if (nativeInt == 0 || src == NULL || dst == NULL) {
+        jniThrowNPE(env, NULL);
+        return;
+    }
+
+    scaler = (SwsScaler *)nativeInt;
+
+    src_c = (*env)->GetByteArrayElements(env, src, NULL);
+    dst_c = (*env)->GetByteArrayElements(env, dst, NULL);
+
+    avpicture_fill(&srcPic, src_c, scaler->srcPixFmt,
+            scaler->srcWidth, scaler->srcHeight);
+    avpicture_fill(&dstPic, dst_c, scaler->dstPixFmt,
+            scaler->dstWidth, scaler->dstHeight);
+
+    sws_scale(scaler->swsContext, srcPic.data, srcPic.linesize, 0,
+            scaler->srcHeight, dstPic.data, dstPic.linesize);
+
+    (*env)->ReleaseByteArrayElements(env, src, src_c, JNI_ABORT);
+    (*env)->ReleaseByteArrayElements(env, dst, dst_c, 0);
+}
+
+void Java_org_devtcg_rojocam_ffmpeg_SwsScaler_nativeDestroy(JNIEnv *env,
+        jclass clazz, jint nativeInt) {
+    SwsScaler *scaler = (SwsScaler *)nativeInt;
+    swsscaler_free(scaler);
+}
+
+jint Java_org_devtcg_rojocam_ffmpeg_SwsScaler_nativePixFmtNV21() { return PIX_FMT_NV21; }
+jint Java_org_devtcg_rojocam_ffmpeg_SwsScaler_nativePixFmtRGBA() { return PIX_FMT_RGBA; }
+jint Java_org_devtcg_rojocam_ffmpeg_SwsScaler_nativePixFmtRGB565BE() { return PIX_FMT_RGB565BE; }
