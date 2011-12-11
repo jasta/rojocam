@@ -128,15 +128,18 @@ int timeval_subtract(struct timeval *result, struct timeval *x,
     return x->tv_sec < y->tv_sec;
 }
 
-static void print_elapsed(const char *str, struct timeval *then) {
+static void store_elapsed(long *elapsed_msec, struct timeval *then) {
     struct timeval now, elapsed;
-    long elapsed_msec;
 
     gettimeofday(&now, NULL);
     timeval_subtract(&elapsed, &now, then);
 
-    elapsed_msec = (elapsed.tv_sec * 1000) + (elapsed.tv_usec / 1000);
+    *elapsed_msec = (elapsed.tv_sec * 1000) + (elapsed.tv_usec / 1000);
+}
 
+static void print_elapsed(const char *str, struct timeval *then) {
+    long elapsed_msec;
+    store_elapsed(&elapsed_msec, then);
     LOGD("%s took %ld msec", str, elapsed_msec);
 }
 
@@ -314,6 +317,12 @@ typedef struct {
      * peer.
      */
     uint8_t tempEncodedBuf[200000];
+
+#if PROFILE_WRITE_FRAME
+    long resampling_time;
+    long encoding_time;
+    long write_time;
+#endif
 } RtpOutputContext;
 
 static void free_av_format_context(AVFormatContext *avContext) {
@@ -471,7 +480,8 @@ static int androidPixFmtToFFmpeg(jint androidPixFmt) {
  *
  * @return True if the packet was written; false if the picture was buffered.
  */
-static bool encode_video_frame(AVStream *stream, AVFrame *tempFrame,
+static bool encode_video_frame(RtpOutputContext *rtpContext,
+        AVStream *stream, AVFrame *tempFrame,
         struct SwsContext *imgConvert, uint8_t *outbuf, int outbuf_size,
         jbyte *data, jlong frameTime, jint frameDuration,
         jint frameFormat, jint frameWidth, jint frameHeight,
@@ -499,7 +509,7 @@ static bool encode_video_frame(AVStream *stream, AVFrame *tempFrame,
             frameHeight, tempFrame->data, tempFrame->linesize);
 
 #if PROFILE_WRITE_FRAME
-    print_elapsed("Resampling", &then);
+    store_elapsed(&rtpContext->resampling_time, &then);
 #endif
 
 #if PROFILE_WRITE_FRAME
@@ -508,7 +518,7 @@ static bool encode_video_frame(AVStream *stream, AVFrame *tempFrame,
     tempFrame->pts = av_rescale_q(frameTime, AV_TIME_BASE_Q, c->time_base);
     n = avcodec_encode_video(c, outbuf, outbuf_size, tempFrame);
 #if PROFILE_WRITE_FRAME
-    print_elapsed("Encoding", &then);
+    store_elapsed(&rtpContext->encoding_time, &then);
 #endif
     if (n > 0) {
         av_init_packet(pkt);
@@ -627,8 +637,8 @@ void Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeWriteFrame(JNIEnv *en
      * read this from the ffmpeg libraries but there was no need to do this as
      * it was passed into us already as a raw video frame. */
     int frameDuration = frameTime - rtpContext->lastFrameTime;
-    bool frameEncoded = encode_video_frame(outputStream, rtpContext->tempFrame,
-            rtpContext->imgConvert,
+    bool frameEncoded = encode_video_frame(rtpContext,
+            outputStream, rtpContext->tempFrame, rtpContext->imgConvert,
             rtpContext->tempEncodedBuf, sizeof(rtpContext->tempEncodedBuf),
             data_c, frameTime, frameDuration, frameFormat,
             frameWidth, frameHeight, frameBitsPerPixel, &pkt);
@@ -662,9 +672,19 @@ void Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeWriteFrame(JNIEnv *en
         outputStream->codec->frame_number++;
 
 #if PROFILE_WRITE_FRAME
-        print_elapsed("Writing", &then);
+        store_elapsed(&rtpContext->write_time, &then);
+#endif
+    } else {
+#if PROFILE_WRITE_TIME
+        rtpContext->write_time = 0;
 #endif
     }
+
+#if PROFILE_WRITE_FRAME
+    LOGI("resample@%ld ms; encode@%ld ms; write@%ld ms",
+            rtpContext->resampling_time, rtpContext->encoding_time,
+            rtpContext->write_time);
+#endif
 }
 
 jint Java_org_devtcg_rojocam_ffmpeg_RtpOutputContext_nativeClose(JNIEnv *env,
