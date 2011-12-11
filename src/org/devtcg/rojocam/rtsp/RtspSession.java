@@ -1,7 +1,5 @@
 package org.devtcg.rojocam.rtsp;
 
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 
 public class RtspSession {
@@ -48,12 +46,6 @@ public class RtspSession {
     }
 
     private static String generateSessionId() {
-        try {
-            MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-            byte[] rawId = sha1.digest(String.valueOf(sRandom.nextInt()).getBytes());
-            return StringUtils.byteArrayToHexString(rawId);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        }
+        return Long.toHexString(sRandom.nextLong());
     }
 }
