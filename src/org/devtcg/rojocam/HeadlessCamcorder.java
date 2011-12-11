@@ -137,7 +137,9 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                         WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                 PixelFormat.TRANSLUCENT);
-        params.gravity = Gravity.TOP;
+        params.gravity = Gravity.TOP | Gravity.RIGHT;
+        params.x = params.y = getContext().getResources().getDimensionPixelOffset(
+                R.dimen.preview_surface_offset);
         wm.addView(dummyView, params);
 
         mDummySurfaceView = dummyView;
