@@ -3,6 +3,7 @@
     <string name="app_name">Rojocam</string>
     <string name="controller_title">Rojocam Console</string>
     <string name="started_successfully">Server started successfully!</string>
+    <string name="error_starting">Error starting server: %s</string>
     <string name="start">Start</string>
     <string name="stop">Stop</string>
     <string name="recording_notif_title">Recording</string>

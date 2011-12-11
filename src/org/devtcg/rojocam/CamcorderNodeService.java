@@ -177,7 +177,8 @@ public class CamcorderNodeService extends Service {
 
             if (receiver != null) {
                 Bundle resultData = new Bundle();
-                resultData.putString(RESULT_ERROR_TEXT, "Error starting node: " + e.getMessage());
+                resultData.putString(RESULT_ERROR_TEXT,
+                        getString(R.string.error_starting, e.getMessage()));
                 receiver.send(RESULT_CODE_ERROR, resultData);
             }
         }
