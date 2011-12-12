@@ -1,5 +1,7 @@
 package org.devtcg.rojocam;
 
+import org.devtcg.rojocam.util.CameraParametersCompat;
+
 import android.content.Context;
 import android.graphics.ImageFormat;
 import android.graphics.PixelFormat;
@@ -166,7 +168,7 @@ public abstract class HeadlessCamcorder implements SurfaceHolder.Callback {
         int format = params.getPreviewFormat();
         Size size = params.getPreviewSize();
         int[] frameRates = new int[2];
-        params.getPreviewFpsRange(frameRates);
+        CameraParametersCompat.newInstance(params).getPreviewFpsRange(frameRates);
         Log.w(TAG, "Camera properties: bpp=" + ImageFormat.getBitsPerPixel(format) +
                 "; format=" + format +
                 "; size=" + size.width + "x" + size.height +
