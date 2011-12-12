@@ -1,4 +1,7 @@
-This project is currently in a very early proof-of-concept state, showing a
-mostly working ffmpeg integration and a basic headless camera set-up.
+This project is currently in a proof-of-concept state, showing a mostly working
+ffmpeg integration and a basic headless camera set-up.
 
-Hopefully I'll have time to finish up the rest of the uninteresting bits :)
+Things are working but please be aware that not all of the privacy and security
+policies are implemented to properly secure the solution.  For example, both
+HTTP basic authentication and unencrypted video transmission are used which are
+of course both vulnerable to severe man-in-the-middle attacks.

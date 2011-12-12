@@ -24,10 +24,11 @@ public class ControllerActivity extends Activity implements OnClickListener {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.main);
+        setContentView(R.layout.controller);
 
         mStart = (Button)findViewById(R.id.start);
         mStop = (Button)findViewById(R.id.stop);
+        findViewById(R.id.settings).setOnClickListener(this);
         mStart.setOnClickListener(this);
         mStop.setOnClickListener(this);
 
@@ -61,6 +62,9 @@ public class ControllerActivity extends Activity implements OnClickListener {
             case R.id.stop:
                 mPendingCommand = COMMAND_STOP;
                 CamcorderNodeService.deactivateCameraNode(this, sStaticReceiver);
+                break;
+            case R.id.settings:
+                SettingsActivity.show(this);
                 break;
         }
     }

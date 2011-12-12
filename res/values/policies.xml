@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- See CameraPolicy.java for a full technical description. -->
+<resources>
+    <string-array name="policyLabels">
+        <item>None</item>
+        <item>Subject warning</item>
+    </string-array>
+
+    <string-array name="policyValues">
+        <item></item>
+        <item>POLICY_SUBJECT_WARNING</item>
+    </string-array>
+
+    <string-array name="policySummary">
+        <item>No special policy defined.</item>
+        <item>Audible and visual cues are given when the camera is about to begin recording.</item>
+    </string-array>
+</resources>

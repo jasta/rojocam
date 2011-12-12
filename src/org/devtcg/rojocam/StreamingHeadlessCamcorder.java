@@ -81,10 +81,20 @@ public class StreamingHeadlessCamcorder extends HeadlessCamcorder {
     protected void onRecorderInitialized(Camera camera) {
         Camera.Parameters params = camera.getParameters();
 
-        mSubjectWarning = new SubjectWarning();
         mCanDoTorch = isTorchModeSupported(params);
 
-        params.setFlashMode(Parameters.FLASH_MODE_TORCH);
+        /* Eh, this is a pretty lame way of handling policies... fix later once we have more than 1 policy. */
+        boolean subjectWarning = SettingsActivity.getPolicy(getContext()).contains(
+                CameraPolicy.POLICY_SUBJECT_WARNING);
+        if (subjectWarning) {
+            mSubjectWarning = new SubjectWarning();
+        } else {
+            mSubjectWarning = null;
+        }
+
+        if (mCanDoTorch && mSubjectWarning != null) {
+            params.setFlashMode(Parameters.FLASH_MODE_TORCH);
+        }
 
         List<Integer> formats = params.getSupportedPreviewFormats();
         Log.d(TAG, "Supported formats:");

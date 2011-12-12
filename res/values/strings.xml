@@ -6,6 +6,17 @@
     <string name="error_starting">Error starting server: %s</string>
     <string name="start">Start</string>
     <string name="stop">Stop</string>
+    <string name="settings">Settings</string>
+    <string name="running_notif_title">Listening</string>
+    <string name="running_notif_text">Rojocom is waiting for incoming connections.</string>
     <string name="recording_notif_title">Recording</string>
     <string name="recording_notif_text">Rojocam is recording from this device.</string>
+    <string name="policy_label">Policy</string>
+    <string name="policy_summary">Policies affect camcorder and server behaviour.</string>
+    <string name="password_label">Password</string>
+    <string name="password_summary">Must be provided by connecting RTSP clients.</string>
+    <string name="category_main">Main</string>
+    <string name="settings_title">Settings</string>
+    <string name="no_password_set">No password set!</string>
+    <string name="password_protected">Stream is password protected.</string>
 </resources>

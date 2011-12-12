@@ -13,6 +13,7 @@ import android.net.Uri;
 import android.util.Log;
 
 import java.io.IOException;
+import java.util.EnumSet;
 
 /**
  * Responds to camera events with appropriate user-notifying behaviour such as
@@ -48,13 +49,17 @@ public class UserAlertHelper {
                 case STREAMING:
                     setNotification(state);
                     if (state == CamcorderNodeService.State.STREAMING) {
-                        /*
-                         * Play an alert sound and although we don't control the
-                         * code here directly, we'll also flash the Camera LED
-                         * to warn the recipient that they are about to be
-                         * recorded.
-                         */
-                        playAlertSound();
+                        EnumSet<CameraPolicy> policies = SettingsActivity.getPolicy(getContext());
+
+                        if (policies.contains(CameraPolicy.POLICY_SUBJECT_WARNING)) {
+                            /*
+                             * Play an alert sound and although we don't control the
+                             * code here directly, we'll also flash the Camera LED
+                             * to warn the recipient that they are about to be
+                             * recorded.
+                             */
+                            playAlertSound();
+                        }
                     }
                     break;
                 case DEACTIVE:
@@ -72,12 +77,24 @@ public class UserAlertHelper {
         Intent intent = new Intent(CamcorderNodeService.ACTION_DEACTIVATE_CAMERA_NODE, null,
                 getContext(), CamcorderNodeService.class);
 
+        int notifTitle;
+        int notifText;
+        int iconId;
+        if (isStreaming) {
+            notifTitle = R.string.recording_notif_title;
+            notifText = R.string.recording_notif_text;
+            iconId = android.R.drawable.stat_sys_phone_call;
+        } else {
+            notifTitle = R.string.running_notif_title;
+            notifText = R.string.running_notif_text;
+            iconId = android.R.drawable.stat_sys_upload;
+        }
+
         Notification notif = new Notification();
-        notif.icon = isStreaming ? android.R.drawable.stat_sys_phone_call :
-                android.R.drawable.stat_sys_upload;
+        notif.icon = iconId;
         notif.flags = Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
-        notif.setLatestEventInfo(getContext(), getContext().getString(R.string.recording_notif_title),
-                getContext().getString(R.string.recording_notif_text),
+        notif.setLatestEventInfo(getContext(), getContext().getString(notifTitle),
+                getContext().getString(notifText),
                 PendingIntent.getService(getContext(), 0, intent, 0));
 
         mNotifMgr.notify(NOTIF_ID, notif);
