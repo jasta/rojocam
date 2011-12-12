@@ -74,8 +74,7 @@ public class UserAlertHelper {
     private void setNotification(CamcorderNodeService.State state) {
         boolean isStreaming = state == CamcorderNodeService.State.STREAMING;
 
-        Intent intent = new Intent(CamcorderNodeService.ACTION_DEACTIVATE_CAMERA_NODE, null,
-                getContext(), CamcorderNodeService.class);
+        Intent intent = new Intent(getContext(), ControllerActivity.class);
 
         int notifTitle;
         int notifText;
@@ -95,7 +94,7 @@ public class UserAlertHelper {
         notif.flags = Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
         notif.setLatestEventInfo(getContext(), getContext().getString(notifTitle),
                 getContext().getString(notifText),
-                PendingIntent.getService(getContext(), 0, intent, 0));
+                PendingIntent.getActivity(getContext(), 0, intent, 0));
 
         mNotifMgr.notify(NOTIF_ID, notif);
     }
