@@ -25,7 +25,16 @@
         android:id="@+id/settings"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
+        android:layout_marginBottom="20dp"
         android:text="@string/settings"
+        />
+
+    <TextView
+        android:id="@+id/wifi_state"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:textAppearance="?android:attr/textAppearanceMedium"
+        android:gravity="center_horizontal"
         />
 
 </LinearLayout>

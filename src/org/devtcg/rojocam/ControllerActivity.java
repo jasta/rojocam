@@ -4,11 +4,18 @@ import org.devtcg.rojocam.util.DetachableResultReceiver;
 import org.devtcg.rojocam.util.DetachableResultReceiver.Receiver;
 
 import android.app.Activity;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.net.wifi.WifiInfo;
+import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 public class ControllerActivity extends Activity implements OnClickListener {
@@ -16,15 +23,23 @@ public class ControllerActivity extends Activity implements OnClickListener {
     private static final int COMMAND_START = 1;
     private static final int COMMAND_STOP = 2;
 
+    private WifiManager mWifiMgr;
+
     private int mPendingCommand;
 
     private Button mStart;
     private Button mStop;
 
+    private TextView mWifiState;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.controller);
+
+        mWifiMgr = (WifiManager)getSystemService(WIFI_SERVICE);
+
+        mWifiState = (TextView)findViewById(R.id.wifi_state);
 
         mStart = (Button)findViewById(R.id.start);
         mStop = (Button)findViewById(R.id.stop);
@@ -39,13 +54,51 @@ public class ControllerActivity extends Activity implements OnClickListener {
     protected void onResume() {
         super.onResume();
         sStaticReceiver.setReceiver(mReceiver);
+
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
+        registerReceiver(mWifiEventReceiver, filter);
+
+        updateWifiState();
     }
 
     @Override
     protected void onPause() {
         super.onStop();
         sStaticReceiver.clearReceiver();
+
+        unregisterReceiver(mWifiEventReceiver);
     }
+
+    private static String formatAddr(int ipAddr) {
+        StringBuilder ipStr = new StringBuilder();
+        ipStr.append(ipAddr & 0xff);
+        for (int i = 8; i <= 24; i += 8) {
+            ipStr.append('.');
+            ipStr.append((ipAddr >> i) & 0xff);
+        }
+        return ipStr.toString();
+    }
+
+    private void updateWifiState() {
+        WifiInfo wifiInfo = mWifiMgr.getConnectionInfo();
+        if (wifiInfo != null) {
+            String ip = formatAddr(wifiInfo.getIpAddress());
+            mWifiState.setText(getString(R.string.wifi_state_connected, ip));
+        } else {
+            mWifiState.setText(getString(R.string.wifi_state_disconnected));
+        }
+    }
+
+    private final BroadcastReceiver mWifiEventReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (WifiManager.NETWORK_STATE_CHANGED_ACTION.equals(action)) {
+                updateWifiState();
+            }
+        }
+    };
 
     private void adjustButtonState() {
         boolean isActive = CamcorderNodeService.isActive();

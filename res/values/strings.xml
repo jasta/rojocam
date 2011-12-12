@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <string name="app_name">Rojocam</string>
     <string name="controller_title">Rojocam Console</string>
     <string name="started_successfully">Server started successfully!</string>
-    <string name="error_starting">Error starting server: %s</string>
+    <string name="error_starting">Error starting server: <xliff:g id="error_text">%s</xliff:g></string>
     <string name="start">Start</string>
     <string name="stop">Stop</string>
     <string name="settings">Settings</string>
@@ -19,4 +19,6 @@
     <string name="settings_title">Settings</string>
     <string name="no_password_set">No password set!</string>
     <string name="password_protected">Stream is password protected.</string>
+    <string name="wifi_state_connected">Wi-Fi connected, <xliff:g id="ip_addr">%s</xliff:g></string>
+    <string name="wifi_state_disconnected">Wi-Fi not connected!</string>
 </resources>
