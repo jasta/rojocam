@@ -46,8 +46,6 @@ public class ControllerActivity extends Activity implements OnClickListener {
         findViewById(R.id.settings).setOnClickListener(this);
         mStart.setOnClickListener(this);
         mStop.setOnClickListener(this);
-
-        adjustButtonState();
     }
 
     @Override
@@ -59,6 +57,7 @@ public class ControllerActivity extends Activity implements OnClickListener {
         filter.addAction(WifiManager.NETWORK_STATE_CHANGED_ACTION);
         registerReceiver(mWifiEventReceiver, filter);
 
+        adjustButtonState();
         updateWifiState();
     }
 
