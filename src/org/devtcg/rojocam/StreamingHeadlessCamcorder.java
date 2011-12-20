@@ -124,9 +124,15 @@ public class StreamingHeadlessCamcorder extends HeadlessCamcorder {
 
         camera.setPreviewCallbackWithBuffer(mPreviewCallback);
 
-        Size size = mPreviewSize;
-        byte[] buf = new FrameBuf(size.width, size.height, mPreviewFormat).getBuffer();
-        camera.addCallbackBuffer(buf);
+        addCallbackBuffers(camera, 2);
+    }
+
+    private void addCallbackBuffers(Camera camera, int numBuffers) {
+        while (numBuffers-- > 0) {
+            Size size = mPreviewSize;
+            byte[] buf = new FrameBuf(size.width, size.height, mPreviewFormat).getBuffer();
+            camera.addCallbackBuffer(buf);
+        }
     }
 
     @Override
