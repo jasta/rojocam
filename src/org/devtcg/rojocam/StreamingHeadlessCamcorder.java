@@ -210,7 +210,7 @@ public class StreamingHeadlessCamcorder extends HeadlessCamcorder {
                 } catch (IOException e) {
                     Log.w(TAG, "Error writing to RTP participant: " + rtpContext.getPeer());
                     IOUtils.closeQuietly(rtpContext);
-                    if (toRemove != null) {
+                    if (toRemove == null) {
                         toRemove = new ArrayList<RtpOutputContext>();
                     }
                     toRemove.add(rtpContext);
