@@ -31,6 +31,8 @@ import java.net.InetSocketAddress;
 public class CamcorderNodeService extends Service {
     private static final String TAG = CamcorderNodeService.class.getSimpleName();
 
+    private static final int RTSP_PORT = 5454;
+
     public static final String ACTION_ACTIVATE_CAMERA_NODE =
             "org.devtcg.rojocam.intent.action.ACTIVATE_CAMERA_NODE";
     public static final String ACTION_DEACTIVATE_CAMERA_NODE =
@@ -50,6 +52,8 @@ public class CamcorderNodeService extends Service {
     private static final String EXTRA_RECEIVER = "receiver";
 
     private SimpleRtspServer mRtspServer;
+
+    private UPnPPortMapper mPortMapper;
 
     /**
      * Wake lock active only when the camera is active (that is, a stream is
@@ -163,9 +167,11 @@ public class CamcorderNodeService extends Service {
         try {
             /* XXX: We should only bind on WiFi! */
             mRtspServer = new SimpleRtspServer();
-            mRtspServer.bind(new InetSocketAddress((InetAddress)null, 5454));
+            mRtspServer.bind(new InetSocketAddress((InetAddress)null, RTSP_PORT));
             mRtspServer.registerMedia("test1.rtp", new CamcorderMediaHandler(mCamcorderRef));
             mRtspServer.start();
+
+            mPortMapper = UPnPPortMapper.mapPortIfNecessary(this, "rojocam mapping", RTSP_PORT);
 
             changeState(State.ACTIVE);
 
@@ -204,6 +210,10 @@ public class CamcorderNodeService extends Service {
             if (mRtspServer != null) {
                 mRtspServer.shutdown();
                 mRtspServer = null;
+            }
+
+            if (mPortMapper != null) {
+                mPortMapper.unmapPorts();
             }
 
             changeState(State.DEACTIVE);

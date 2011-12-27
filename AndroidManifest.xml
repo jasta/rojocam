@@ -14,6 +14,10 @@
          during initial set-up) -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
+    <!-- Required by cling (our UPnP library). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
     <!-- Required only for debugging at the moment... -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
 
